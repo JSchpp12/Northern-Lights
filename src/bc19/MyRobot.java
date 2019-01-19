@@ -19,7 +19,10 @@ public class MyRobot extends BCAbstractRobot {
     //Call this array to cycle through all directions easily
     int[][] myDirections = {NORTH, NORTHEAST, EAST, SOUTHEAST, SOUTH, SOUTHWEST, WEST, NORTHWEST};
 
+    Robot[] robots; //At the beginning of each turn this array will be filled with all robots visible to me
+
     public Action turn() {
+        robots = getVisibleRobots();
         step++;
 
         if(me.unit == SPECS.CASTLE) {
@@ -57,6 +60,10 @@ public class MyRobot extends BCAbstractRobot {
         }
     }
 
+
+    //Methods
+
+
     //Checks to see if the tile dx and dy away from me is passable.
     public boolean isPassable(int dx, int dy) {
         return map[me.y + dy][me.x + dx];
@@ -66,7 +73,6 @@ public class MyRobot extends BCAbstractRobot {
     public boolean isOccupied(int dx, int dy) {
         int posX = me.x + dx;
         int posY = me.y + dy;
-        Robot[] robots = getVisibleRobots();
 
         for(int i = 0; i < robots.length; i++) {
             if(robots[i].x == posX && robots[i].y == posY) {
@@ -100,6 +106,16 @@ public class MyRobot extends BCAbstractRobot {
         }
         log("No open positions");
         return -1;
+    }
+
+    //Returns the distance between two tiles
+    public int distanceBetween(int x1, int y1, int x2, int y2) {
+        return Math.abs(x2 - x1) + Math.abs(y2 - y1);
+    }
+
+    //Returns the distance me is from another robot
+    public int distanceFrom(Robot r) {
+        return Math.abs(r.x - me.x) + Math.abs(r.y - me.y);
     }
 }
 
