@@ -1,10 +1,15 @@
 package bc19;
+import java.util.ArrayList;
 
 public class MyRobot extends BCAbstractRobot {
     int step = -1;
 
     int tradeKarbon = 0;
     int tradeFuel = 0;
+
+    int mapLength;
+    int clusterRadius = 4;
+    int castleClusterRadius = 6;
 
     //Use these as one tile steps in a direction
     int[] NORTH = {0, -1};
@@ -20,12 +25,25 @@ public class MyRobot extends BCAbstractRobot {
     int[][] myDirections = {NORTH, NORTHEAST, EAST, SOUTHEAST, SOUTH, SOUTHWEST, WEST, NORTHWEST};
 
     Robot[] robots; //At the beginning of each turn this array will be filled with all robots visible to me
+    ArrayList clusterX;
+    ArrayList clusterY;
+    //Clusters don't count if they are near a castle
 
     public Action turn() {
         robots = getVisibleRobots();
         step++;
 
         if(me.unit == SPECS.CASTLE) {
+
+            if(step == 0) { //First Turn
+                initialize();
+                findClusters();
+                removeClustersNearCastle();
+
+                for(int i = 0; i < clusterY.size(); i++) { //List Clusters
+                    log("Cluster: (" + String.valueOf(clusterX.get(i)) + "," + String.valueOf(clusterY.get(i)) + ")");
+                }
+            }
 
             int pref = findOpenBuildSpot(0);
             if(pref > -1) {
@@ -116,6 +134,49 @@ public class MyRobot extends BCAbstractRobot {
     //Returns the distance me is from another robot
     public int distanceFrom(Robot r) {
         return Math.abs(r.x - me.x) + Math.abs(r.y - me.y);
+    }
+
+    //The init function for castles
+    public void initialize() {
+        mapLength = map.length;
+        log(String.valueOf(map.length));
+        clusterX = new ArrayList();
+        clusterY = new ArrayList();
+
+
+    }
+
+    //Scans the map and finds the location of clusters on the map (prioritizes karbonite)
+    public void findClusters() {
+        for(int i = 0; i < mapLength; i++) {
+            for(int j = 0; j < mapLength; j++) {
+                if(karboniteMap[j][i]) {
+                    if (!isClusterNearby(i, j)) {
+                        clusterX.add(i);
+                        clusterY.add(j);
+                    }
+                }
+            }
+        }
+    }
+
+    //Returns if there is already a cluster point close to a resource deopt to prevent double clustering
+    public boolean isClusterNearby(int x, int y) {
+        for(int i = 0; i < clusterX.size(); i++) {
+            if(distanceBetween(x, y, (int) clusterX.get(i), (int) clusterY.get(i)) < clusterRadius)
+                return true;
+        }
+        return false;
+    }
+
+    public void removeClustersNearCastle() {
+        for(int i = 0; i < clusterX.size(); i++) {
+            if(distanceBetween(me.x, me.y, (int) clusterX.get(i), (int) clusterY.get(i)) < castleClusterRadius) {
+                clusterX.remove(i);
+                clusterY.remove(i);
+                i--;
+            }
+        }
     }
 }
 
