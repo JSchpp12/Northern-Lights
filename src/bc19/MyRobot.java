@@ -15,6 +15,9 @@ public class MyRobot extends BCAbstractRobot {
     int tradeKarbon = 0;
     int tradeFuel = 0;
 
+    int friendlyCastles = 0;
+    int enemyCastles = 0;
+
     int mapLength;
     int clusterRadius = 4;
     int castleClusterRadius = 6;
@@ -25,6 +28,8 @@ public class MyRobot extends BCAbstractRobot {
     int UNKOWN = -1;
     int MINE = 0;
     int RETURN_RESOURCE = 1;
+    int SPAWN_ADJACENT = 2;
+    int SPAWN_NEARBY = 3;
 
     int goal = UNKOWN;
 
@@ -80,7 +85,9 @@ public class MyRobot extends BCAbstractRobot {
 
         if(me.unit == SPECS.CASTLE) {
 
-            if(step == 0) { //First Turn
+            //First Turn
+            if(step == 0) {
+                log("Let's go");
                 initializeCastle();
                 determineSymmetry();
 
@@ -102,25 +109,39 @@ public class MyRobot extends BCAbstractRobot {
             } else if(step == 3) {
                 determineFriendlyCastlesY();
                 determineEnemyCastles();
+                removeClustersNearCastles();
+                log("Clusters: " + String.valueOf(clusterY.size()));
             }
 
-            if(adjacentResource.size() > 0) { //If there is an unoccupied resource adjacent to the castle spawn a pilgrim on that spot
-                int direction = findOpenBuildSpot((int)adjacentResource.get(0));
-                adjacentResource.remove(0);
-                //log("Building pilgrim for adjacent resource");
-                return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+            // Goals -----------------------------------
+
+            if(goal == SPAWN_ADJACENT) { //Spawn pilgrims on resources adjacent to this castle
+                if(adjacentResource.size() < 1)
+                    goal = SPAWN_NEARBY;
+                else {
+                    int direction = findOpenBuildSpot((int)adjacentResource.get(0));
+                    adjacentResource.remove(0);
+                    //log("Building pilgrim for adjacent resource");
+                    return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                }
             }
-            else if(nearbyResourceX.size() > 0) { //If there is an unoccupied resource within castleClusterRadius spawn a pilgrim to go to it
-                int direction = directionTo((int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
-                direction = findOpenBuildSpot(direction);
-                nearbyResourceX.remove(0);
-                nearbyResourceY.remove(0);
-                //log("Building a pilgrim for nearby resource");
-                return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+            if(goal == SPAWN_NEARBY) { //Spawn a pilgrim to handle resources within a radius of the castle
+                if(nearbyResourceX.size() < 1)
+                    goal = UNKOWN;
+                else {
+                    int direction = directionTo((int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
+                    direction = findOpenBuildSpot(direction);
+                    nearbyResourceX.remove(0);
+                    nearbyResourceY.remove(0);
+                    //log("Building a pilgrim for nearby resource");
+                    return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                }
             }
 
             return proposeTrade(tradeKarbon, tradeFuel); //If the castle can't find anything to do, it ends its turn by proposing a trade
         }
+
+        // Church ---------------------------------------------------------------------------
 
         else if(me.unit == SPECS.CHURCH) {
 
@@ -193,6 +214,8 @@ public class MyRobot extends BCAbstractRobot {
                 else
                     friendlyCastlesX.add(robots[i].castle_talk);
                 friendlyCastlesId.add(robots[i].id);
+                friendlyCastles++;
+                enemyCastles++;
             }
         }
         broadcastLocationX();
@@ -236,11 +259,11 @@ public class MyRobot extends BCAbstractRobot {
             if(map[i][i] != map[mapLength - 1 - i][mapLength - 1 - i]) {
                 if(map[i][mapLength - 1 - i] == map[i][i]) {
                     symmetry = VERTICAL;
-                    log("Symmetry: VERTICAL");
+                    //log("Symmetry: VERTICAL");
                 }
                 else {
                     symmetry = HORIZONTAL;
-                    log("Symmetry: HORIZONTAL");
+                    //log("Symmetry: HORIZONTAL");
                 }
                 return;
             }
@@ -362,6 +385,7 @@ public class MyRobot extends BCAbstractRobot {
     public void initializeCastle() {
         myTeam = me.team;
         mapLength = map.length;
+        goal = SPAWN_NEARBY;
         clusterX = new ArrayList();
         clusterY = new ArrayList();
         adjacentResource = new ArrayList();
@@ -423,6 +447,30 @@ public class MyRobot extends BCAbstractRobot {
                 clusterX.remove(i);
                 clusterY.remove(i);
                 i--;
+            }
+        }
+    }
+
+    //Same as above but does it for all other castles
+    public void removeClustersNearCastles() {
+        for(int h = 0; h < friendlyCastles; h++) {
+            if(me.id == (int)friendlyCastlesId.get(h))
+                continue;
+            for(int i = 0; i < clusterX.size(); i++) {
+                if(distanceBetween((int)friendlyCastlesX.get(h), (int)friendlyCastlesY.get(h), (int)clusterX.get(i), (int)clusterY.get(i)) < castleClusterRadius) {
+                    clusterX.remove(i);
+                    clusterY.remove(i);
+                    i--;
+                }
+            }
+        }
+        for(int h = 0; h < enemyCastles; h++) {
+            for(int i = 0; i < clusterX.size(); i++) {
+                if(distanceBetween((int)enemyCastlesX.get(h), (int)enemyCastlesY.get(h), (int)clusterX.get(i), (int)clusterY.get(i)) < castleClusterRadius) {
+                    clusterX.remove(i);
+                    clusterY.remove(i);
+                    i--;
+                }
             }
         }
     }
