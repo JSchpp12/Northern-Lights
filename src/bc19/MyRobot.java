@@ -19,7 +19,7 @@ public class MyRobot extends BCAbstractRobot {
     int enemyCastles = 0;
 
     int mapLength;
-    int clusterRadius = 4;
+    int clusterRadius = 6;
     int castleClusterRadius = 6;
 
     int maxKarbonite = 20;
@@ -30,6 +30,8 @@ public class MyRobot extends BCAbstractRobot {
     int RETURN_RESOURCE = 1;
     int SPAWN_ADJACENT = 2;
     int SPAWN_NEARBY = 3;
+    int LISTEN = 4;
+    int TRAVEL = 5;
 
     int goal = UNKOWN;
 
@@ -38,8 +40,10 @@ public class MyRobot extends BCAbstractRobot {
     int destinationY;
 
     //Pilgrim Variables
-    boolean stationaryUnit = false;
+    boolean stationaryUnit = true;
     int homeCastle; //A direction
+    int resourceX;
+    int resourceY;
 
     //Use these as one tile steps in a direction
     int[] NORTH = {0, -1};
@@ -131,6 +135,7 @@ public class MyRobot extends BCAbstractRobot {
                 else {
                     int direction = directionTo((int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
                     direction = findOpenBuildSpot(direction);
+                    broadcast(4, (int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
                     nearbyResourceX.remove(0);
                     nearbyResourceY.remove(0);
                     //log("Building a pilgrim for nearby resource");
@@ -156,18 +161,41 @@ public class MyRobot extends BCAbstractRobot {
                 if(isOnResource())
                     goal = MINE;
             }
+            if(goal == LISTEN) {
+                for(int i = 0; i < robots.length; i++) {
+                    if(robots[i].unit == SPECS.CASTLE && isAdjacentTo(robots[i]) > -1) {
+                        int[] temp = decodeSignal(robots[i]);
+                        resourceX = temp[0];
+                        resourceY = temp[1];
+                        if(distanceBetween(me.x, me.y, resourceX, resourceY) <= castleClusterRadius)
+                            goal = MINE;
+                        else
+                            goal = TRAVEL;
+                        break;
+                    }
+                }
+            }
             if(hasMaxResource()) {
                 goal = RETURN_RESOURCE;
             }
 
             if(goal == MINE) {
-                //log("Mining");
-                return mine();
+                if(stationaryUnit)
+                    return mine();
+                else {
+                    if(isOnResource())
+                        return mine();
+                    else
+                        log("Moving towards resource");
+                }
             }
             else if(goal == RETURN_RESOURCE) {
                 //log("Giving back resource");
                 goal = MINE;
                 return give(myDirections[homeCastle][0], myDirections[homeCastle][1], me.karbonite, me.fuel);
+            }
+            else if(goal == TRAVEL) {
+                log("I'm a traveler");
             }
         }
 
@@ -190,6 +218,22 @@ public class MyRobot extends BCAbstractRobot {
 
 
     //Methods --------------------
+
+    //Broadcasts 2 numbers between 0 and 63 inclusive
+    public void broadcast(int radius_squared, int message1, int message2) {
+        log("Broadcasting: " + String.valueOf(message1) + "," + String.valueOf(message2));
+        signal(message2*64 + message1, radius_squared);
+    }
+
+    //Interprets a signal into 2 numbers
+    public int[] decodeSignal(Robot sender) {
+        int[] signal = new int[2];
+        int value = sender.signal;
+        signal[0] = value%64;
+        signal[1] = (int)value/64;
+        log("Decoding Signal: " + String.valueOf(signal[0]) + "," + String.valueOf(signal[1]));
+        return signal;
+    }
 
     //Bradcast Location on castle talk. broadcasts 64 if me.x == 0
     public void broadcastLocationX() {
@@ -237,7 +281,7 @@ public class MyRobot extends BCAbstractRobot {
         broadcastLocationY();
     }
 
-    //Learn the locations of all enemy castles
+    //Calculates the locations of all enemy castles
     public void determineEnemyCastles() {
         for(int i = 0; i < friendlyCastlesX.size(); i++) {
             if(symmetry == VERTICAL) {
@@ -247,8 +291,7 @@ public class MyRobot extends BCAbstractRobot {
                 enemyCastlesX.add((int) friendlyCastlesX.get(i));
                 enemyCastlesY.add(mapLength - (int) friendlyCastlesY.get(i) - 1);
             }
-            log("Enemy castle at: " + String.valueOf((int)enemyCastlesX.get(i)) + "," + String.valueOf((int)
-                    enemyCastlesY.get(i)));
+            //log("Enemy castle at: " + String.valueOf((int)enemyCastlesX.get(i)) + "," + String.valueOf((int)enemyCastlesY.get(i)));
         }
     }
 
@@ -385,7 +428,7 @@ public class MyRobot extends BCAbstractRobot {
     public void initializeCastle() {
         myTeam = me.team;
         mapLength = map.length;
-        goal = SPAWN_NEARBY;
+        goal = SPAWN_ADJACENT;
         clusterX = new ArrayList();
         clusterY = new ArrayList();
         adjacentResource = new ArrayList();
@@ -401,6 +444,10 @@ public class MyRobot extends BCAbstractRobot {
     //The init function for pilgrims
     public void initializePilgrim() {
         homeCastle = findAdjacentCastle();
+        if(!isOnResource()) {
+            stationaryUnit = false;
+            goal = LISTEN;
+        }
     }
 
     public int findAdjacentCastle() {
@@ -528,16 +575,3 @@ public class MyRobot extends BCAbstractRobot {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
