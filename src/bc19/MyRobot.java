@@ -59,10 +59,20 @@ public class MyRobot extends BCAbstractRobot {
     ArrayList nearbyResourceX;
     ArrayList nearbyResourceY;
 
+    ArrayList friendlyCastlesX;
+    ArrayList friendlyCastlesY;
+    ArrayList friendlyCastlesId;
+    ArrayList enemyCastlesX;
+    ArrayList enemyCastlesY;
+
     boolean symmetry;
 
     boolean HORIZONTAL = true;
     boolean VERTICAL = false;
+
+    int myTeam;
+
+    //Turn ---------------------------------------------
 
     public Action turn() {
         robots = getVisibleRobots();
@@ -78,17 +88,26 @@ public class MyRobot extends BCAbstractRobot {
                 removeClustersNearCastle();
 
                 for(int i = 0; i < clusterY.size(); i++) { //List Clusters
-                    log("Cluster: (" + String.valueOf(clusterX.get(i)) + "," + String.valueOf(clusterY.get(i)) + ")");
+                    //log("Cluster: (" + String.valueOf(clusterX.get(i)) + "," + String.valueOf(clusterY.get(i)) + ")");
                 }
 
                 findAdjacentResources();
                 findNearbyResources();
+
+                broadcastLocationX();
+            } else if(step == 1) {
+                determineFriendlyCastlesX();
+            } else if(step == 2) {
+                broadcastLocationY();
+            } else if(step == 3) {
+                determineFriendlyCastlesY();
+                determineEnemyCastles();
             }
 
             if(adjacentResource.size() > 0) { //If there is an unoccupied resource adjacent to the castle spawn a pilgrim on that spot
                 int direction = findOpenBuildSpot((int)adjacentResource.get(0));
                 adjacentResource.remove(0);
-                log("Building pilgrim for adjacent resource");
+                //log("Building pilgrim for adjacent resource");
                 return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
             }
             else if(nearbyResourceX.size() > 0) { //If there is an unoccupied resource within castleClusterRadius spawn a pilgrim to go to it
@@ -96,7 +115,7 @@ public class MyRobot extends BCAbstractRobot {
                 direction = findOpenBuildSpot(direction);
                 nearbyResourceX.remove(0);
                 nearbyResourceY.remove(0);
-                log("Building a pilgrim for nearby resource");
+                //log("Building a pilgrim for nearby resource");
                 return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
             }
 
@@ -150,6 +169,65 @@ public class MyRobot extends BCAbstractRobot {
 
 
     //Methods --------------------
+
+    //Bradcast Location on castle talk. broadcasts 64 if me.x == 0
+    public void broadcastLocationX() {
+        castleTalk(me.x);
+        if(me.x == 0)
+            castleTalk(64);
+    }
+
+    //Bradcast Location on castle talk. braodcasts 64 if me.y == 0
+    public void broadcastLocationY() {
+        castleTalk(me.y);
+        if(me.y == 0)
+            castleTalk(64);
+    }
+
+    //Learn the X position of all castles
+    public void determineFriendlyCastlesX() {
+        for(int i = 0; i < robots.length; i++) {
+            if(robots[i].castle_talk > 0 && robots[i].team == myTeam) {
+                if(robots[i].castle_talk == 64)
+                    friendlyCastlesX.add(0);
+                else
+                    friendlyCastlesX.add(robots[i].castle_talk);
+                friendlyCastlesId.add(robots[i].id);
+            }
+        }
+        broadcastLocationX();
+    }
+
+    //Learn the Y position of all castles
+    public void determineFriendlyCastlesY() {
+        for(int h = 0; h < friendlyCastlesId.size(); h++) {
+            for(int i = 0; i < robots.length; i++) {
+                if(robots[i].id == (int)friendlyCastlesId.get(h)) {
+                    if(robots[i].castle_talk == 64)
+                        friendlyCastlesY.add(0);
+                    else
+                        friendlyCastlesY.add(robots[i].castle_talk);
+                    break;
+                }
+            }
+        }
+        broadcastLocationY();
+    }
+
+    //Learn the locations of all enemy castles
+    public void determineEnemyCastles() {
+        for(int i = 0; i < friendlyCastlesX.size(); i++) {
+            if(symmetry == VERTICAL) {
+                enemyCastlesX.add(mapLength - (int) friendlyCastlesX.get(i) - 1);
+                enemyCastlesY.add((int)friendlyCastlesY.get(i));
+            } else {
+                enemyCastlesX.add((int) friendlyCastlesX.get(i));
+                enemyCastlesY.add(mapLength - (int) friendlyCastlesY.get(i) - 1);
+            }
+            log("Enemy castle at: " + String.valueOf((int)enemyCastlesX.get(i)) + "," + String.valueOf((int)
+                    enemyCastlesY.get(i)));
+        }
+    }
 
     //Records if the map is horizontally or vertically symmetric.
     //Depending on the map it is possible this method will fail but it is not likely.
@@ -207,6 +285,8 @@ public class MyRobot extends BCAbstractRobot {
 
     //Checks to see if the tile dx and dy away from me is passable.
     public boolean isPassable(int dx, int dy) {
+        if(offMap(me.x + dx, me.y + dy))
+            return false;
         return map[me.y + dy][me.x + dx];
     }
 
@@ -214,6 +294,9 @@ public class MyRobot extends BCAbstractRobot {
     public boolean isOccupied(int dx, int dy) {
         int posX = me.x + dx;
         int posY = me.y + dy;
+
+        if(offMap(posX, posY))
+            return false;
 
         for(int i = 0; i < robots.length; i++) {
             if(robots[i].x == posX && robots[i].y == posY) {
@@ -277,12 +360,18 @@ public class MyRobot extends BCAbstractRobot {
 
     //The init function for castles
     public void initializeCastle() {
+        myTeam = me.team;
         mapLength = map.length;
         clusterX = new ArrayList();
         clusterY = new ArrayList();
         adjacentResource = new ArrayList();
         nearbyResourceX = new ArrayList();
         nearbyResourceY = new ArrayList();
+        friendlyCastlesX = new ArrayList();
+        friendlyCastlesY = new ArrayList();
+        friendlyCastlesId = new ArrayList();
+        enemyCastlesX = new ArrayList();
+        enemyCastlesY = new ArrayList();
     }
 
     //The init function for pilgrims
@@ -340,21 +429,17 @@ public class MyRobot extends BCAbstractRobot {
 
     //Adds any adjacent resources to a castle or church to its adjacent array
     public void findAdjacentResources() {
-        log("Finding Adjacent Resources");
+        //log("Finding Adjacent Resources");
         for(int i = 0; i < myDirections.length; i++) {
-            if(offMap(me.x + myDirections[i][0], me.y + myDirections[i][1])) {
-                log("Skipping a spot");
+            if(offMap(me.x + myDirections[i][0], me.y + myDirections[i][1]))
                 continue; //Skips spots off the map
-            }
             if(karboniteMap[me.y + myDirections[i][1]][me.x + myDirections[i][0]]) {
                 adjacentResource.add(i);
             }
         }
         for(int i = 0; i < myDirections.length; i++) {
-            if(offMap(me.x + myDirections[i][0], me.y + myDirections[i][1])) {
-                log("Skipping a spot");
+            if(offMap(me.x + myDirections[i][0], me.y + myDirections[i][1]))
                 continue; //Skips spots off the map
-            }
             if(fuelMap[me.y + myDirections[i][1]][me.x + myDirections[i][0]]) {
                 adjacentResource.add(i);
             }
@@ -373,25 +458,25 @@ public class MyRobot extends BCAbstractRobot {
 
     //Returns the direction to a specific position from the robot. Returns NORTH if the robot is already on the spot
     public int directionTo(int posX, int posY) {
-        if(me.x > posX) {
-            if(me.y > posY)
-                return 1; //NORTHEAST
-            else if(me.y < posY)
-                return 3; //SOUTHEAST
-            else
-                return 2; //EAST
-        } else if(me.x < posX) {
-            if(me.y > posY)
+        if(posX < me.x) {
+            if(posY < me.y)
                 return 7; //NORTHWEST
-            else if(me.y < posY)
+            else if(posY > me.y)
                 return 5; //SOUTHWEST
             else
                 return 6; //WEST
-        } else {
-            if(me.y > posY)
-                return 0; //NORTH
+        } else if(posX > me.x) {
+            if(posY > me.y)
+                return 3; //SOUTHEAST
+            else if(posY < me.y)
+                return 1; //NORTHEAST
             else
+                return 2; //EAST
+        } else {
+            if(posY > me.y)
                 return 4; //SOUTH
+            else
+                return 0; //NORTH
         }
     }
 }
