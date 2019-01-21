@@ -22,6 +22,8 @@ public class MyRobot extends BCAbstractRobot {
     int clusterRadius = 6;
     int castleClusterRadius = 6;
 
+    int adjacentBroadcastingRaduis = 4; //The raduis to be used for braodcasting to adjacent units
+
     int maxKarbonite = 20;
     int maxFuel = 100;
 
@@ -42,6 +44,7 @@ public class MyRobot extends BCAbstractRobot {
     //Pilgrim Variables
     boolean stationaryUnit = true;
     int homeCastle; //A direction
+    Robot homeCastleUnit;
     int resourceX;
     int resourceY;
 
@@ -98,9 +101,9 @@ public class MyRobot extends BCAbstractRobot {
                 findClusters();
                 removeClustersNearCastle();
 
-                for(int i = 0; i < clusterY.size(); i++) { //List Clusters
+                //for(int i = 0; i < clusterY.size(); i++) { //List Clusters
                     //log("Cluster: (" + String.valueOf(clusterX.get(i)) + "," + String.valueOf(clusterY.get(i)) + ")");
-                }
+                //}
 
                 findAdjacentResources();
                 findNearbyResources();
@@ -135,7 +138,7 @@ public class MyRobot extends BCAbstractRobot {
                 else {
                     int direction = directionTo((int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
                     direction = findOpenBuildSpot(direction);
-                    broadcast(4, (int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
+                    broadcast(adjacentBroadcastingRaduis, (int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
                     nearbyResourceX.remove(0);
                     nearbyResourceY.remove(0);
                     //log("Building a pilgrim for nearby resource");
@@ -157,23 +160,14 @@ public class MyRobot extends BCAbstractRobot {
                 initializePilgrim();
             }
 
-            if(goal == UNKOWN) {
-                if(isOnResource())
-                    goal = MINE;
-            }
             if(goal == LISTEN) {
-                for(int i = 0; i < robots.length; i++) {
-                    if(robots[i].unit == SPECS.CASTLE && isAdjacentTo(robots[i]) > -1) {
-                        int[] temp = decodeSignal(robots[i]);
-                        resourceX = temp[0];
-                        resourceY = temp[1];
-                        if(distanceBetween(me.x, me.y, resourceX, resourceY) <= castleClusterRadius)
-                            goal = MINE;
-                        else
-                            goal = TRAVEL;
-                        break;
-                    }
-                }
+                int[] temp = decodeSignal(homeCastleUnit);
+                resourceX = temp[0];
+                resourceY = temp[1];
+                if(distanceBetween(me.x, me.y, resourceX, resourceY) <= castleClusterRadius)
+                    goal = MINE;
+                else
+                    goal = TRAVEL;
             }
             if(hasMaxResource()) {
                 goal = RETURN_RESOURCE;
@@ -190,9 +184,17 @@ public class MyRobot extends BCAbstractRobot {
                 }
             }
             else if(goal == RETURN_RESOURCE) {
-                //log("Giving back resource");
-                goal = MINE;
-                return give(myDirections[homeCastle][0], myDirections[homeCastle][1], me.karbonite, me.fuel);
+                if(stationaryUnit) {
+                    goal = MINE;
+                    return give(myDirections[homeCastle][0], myDirections[homeCastle][1], me.karbonite, me.fuel);
+                } else {
+                    if(isAdjacentTo(homeCastleUnit) > -1) {
+                        goal = MINE;
+                        return give(myDirections[isAdjacentTo(homeCastleUnit)][0], myDirections[isAdjacentTo(homeCastleUnit)][1], me.karbonite, me.fuel);
+                    } else {
+                        //Move towards homeCastle
+                    }
+                }
             }
             else if(goal == TRAVEL) {
                 log("I'm a traveler");
@@ -444,10 +446,12 @@ public class MyRobot extends BCAbstractRobot {
     //The init function for pilgrims
     public void initializePilgrim() {
         homeCastle = findAdjacentCastle();
+        homeCastleUnit = findAdjacentCastleUnit();
         if(!isOnResource()) {
             stationaryUnit = false;
             goal = LISTEN;
-        }
+        } else
+            goal = MINE;
     }
 
     public int findAdjacentCastle() {
@@ -459,6 +463,15 @@ public class MyRobot extends BCAbstractRobot {
             }
         }
         return -1;
+    }
+
+    public Robot findAdjacentCastleUnit() {
+        for(int i = 0; i < robots.length; i++) {
+            if(robots[i].unit == SPECS.CASTLE && isAdjacentTo(robots[i]) > -1) {
+                return robots[i];
+            }
+        }
+        return null;
     }
 
     //Scans the map and finds the location of clusters on the map (prioritizes karbonite)
