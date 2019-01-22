@@ -692,20 +692,60 @@ d) for each successor
 e) push q on the closed list
 end (while loop)
      */
-    public void buildNodeMap(int[][] stop)
+    public void findPath(int[][] stop)
     {
+        node tempNode; //temporary node storage
+        node selectedNode; //node with the smallest f value in openList
+
        List<Object> openList = new List<Object>();
        List<Object> closedList = new List<Object>();
 
+       //create starting node and put it in the openList -- leave f = 0
+
+        node startNode = new node();
+        startNode.x = = me.x;
+        startNode.y = me.y;
+        openList.add(startNode);
+
+        try
+        {
+            while (openList.isEmpty() == false)
+            {
+
+                //find element in list that has the smallest f value
+                int selectedIndex;
+
+                //go through all of the elements in the list and select index of target node
+                for (int i = 0; i < openList.size(); i++)
+                {
+                    int smallestF = 0;
+                    tempNode = openList.get(i);
+
+                    if ((tempNode.f < smallestF ) || (i == 0))
+                    {
+                        selectedIndex = i;
+                    }
+                }
+
+                //pop target element out of list
+                selectedNode = openList.get(selectedIndex);
+
+                openList.remove(selectedIndex); //remove the selectedNode from the list
+
+                //generate the 8 successors to the selected node
+                /*
+                for (int j = 0; j < 8; j++)
+                {
+                    node newNode = new node();
+                    newNode.x = selectedNode.x - 1;
+                    newNode.y = selectedNode.y + 1;
+
+                    //need to find all adjacent blocks, check if they are valid blocks FIRST
+                }
+                */
+            }
+        }
     }
-
-    //build nodeMap
-    public void buildNodeMap()
-    {
-
-    }
-
-    //class ---------------------------------------------
 
     public class nodeMap
     {
@@ -716,12 +756,21 @@ end (while loop)
          */
         int type = 0;
     }
+}
 
-    public class node
-    {
-        //if this is destination
-        boolean target = false;
+public class node
+{
 
-    }
+    node parentNode;
 
+   successors = new node[8]; //place to store the successor nodes around this node
+
+    //x and y are this node's corrdinates
+    int x = 0;
+    int y = 0;
+
+    //these values are used in A* algorithm
+    int g = 0;
+    int k = 0;
+    int f = 0;
 }
