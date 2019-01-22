@@ -1,5 +1,8 @@
 package bc19;
+
+import java.lang.*;
 import java.util.ArrayList;
+import java.util.*;
 
 public class MyRobot extends BCAbstractRobot {
 
@@ -100,10 +103,10 @@ public class MyRobot extends BCAbstractRobot {
         robots = getVisibleRobots();
         step++;
 
-        if(me.unit == SPECS.CASTLE) {
+        if (me.unit == SPECS.CASTLE) {
 
             //First Turn
-            if(step == 0) {
+            if (step == 0) {
                 log("Let's go");
                 initializeCastle();
                 determineSymmetry();
@@ -112,18 +115,18 @@ public class MyRobot extends BCAbstractRobot {
                 removeClustersNearCastle();
 
                 //for(int i = 0; i < clusterY.size(); i++) { //List Clusters
-                    //log("Cluster: (" + String.valueOf(clusterX.get(i)) + "," + String.valueOf(clusterY.get(i)) + ")");
+                //log("Cluster: (" + String.valueOf(clusterX.get(i)) + "," + String.valueOf(clusterY.get(i)) + ")");
                 //}
 
                 findAdjacentResources();
                 findNearbyResources();
 
                 broadcastLocationX();
-            } else if(step == 1) {
+            } else if (step == 1) {
                 determineFriendlyCastlesX();
-            } else if(step == 2) {
+            } else if (step == 2) {
                 broadcastLocationY();
-            } else if(step == 3) {
+            } else if (step == 3) {
                 determineFriendlyCastlesY();
                 determineEnemyCastles();
                 removeClustersNearCastles();
@@ -132,23 +135,23 @@ public class MyRobot extends BCAbstractRobot {
 
             // Goals -----------------------------------
 
-            if(goal == SPAWN_ADJACENT) { //Spawn pilgrims on resources adjacent to this castle
-                if(adjacentResource.size() < 1)
+            if (goal == SPAWN_ADJACENT) { //Spawn pilgrims on resources adjacent to this castle
+                if (adjacentResource.size() < 1)
                     goal = SPAWN_NEARBY;
                 else {
-                    int direction = findOpenBuildSpot((int)adjacentResource.get(0));
+                    int direction = findOpenBuildSpot((int) adjacentResource.get(0));
                     adjacentResource.remove(0);
                     //log("Building pilgrim for adjacent resource");
                     return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
                 }
             }
-            if(goal == SPAWN_NEARBY) { //Spawn a pilgrim to handle resources within a radius of the castle
-                if(nearbyResourceX.size() < 1)
+            if (goal == SPAWN_NEARBY) { //Spawn a pilgrim to handle resources within a radius of the castle
+                if (nearbyResourceX.size() < 1)
                     goal = UNKOWN;
                 else {
-                    int direction = directionTo((int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
+                    int direction = directionTo((int) nearbyResourceX.get(0), (int) nearbyResourceY.get(0));
                     direction = findOpenBuildSpot(direction);
-                    broadcast(adjacentBroadcastingRaduis, (int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
+                    broadcast(adjacentBroadcastingRaduis, (int) nearbyResourceX.get(0), (int) nearbyResourceY.get(0));
                     nearbyResourceX.remove(0);
                     nearbyResourceY.remove(0);
                     //log("Building a pilgrim for nearby resource");
@@ -161,46 +164,43 @@ public class MyRobot extends BCAbstractRobot {
 
         // Church ---------------------------------------------------------------------------
 
-        else if(me.unit == SPECS.CHURCH) {
+        else if (me.unit == SPECS.CHURCH) {
 
-        }
-
-        else if(me.unit == SPECS.PILGRIM) {
-            if(step == 0) { //First Turn
+        } else if (me.unit == SPECS.PILGRIM) {
+            if (step == 0) { //First Turn
                 initializePilgrim();
             }
 
-            if(goal == LISTEN) {
+            if (goal == LISTEN) {
                 int[] temp = decodeSignal(homeCastleUnit);
                 resourceX = temp[0];
                 resourceY = temp[1];
-                if(distanceBetween(me.x, me.y, resourceX, resourceY) <= castleClusterRadius)
+                if (distanceBetween(me.x, me.y, resourceX, resourceY) <= castleClusterRadius)
                     goal = MINE;
                 else
                     goal = TRAVEL;
             }
-            if(hasMaxResource()) {
+            if (hasMaxResource()) {
                 goal = RETURN_RESOURCE;
             }
 
-            if(goal == MINE) {
-                if(stationaryUnit)
+            if (goal == MINE) {
+                if (stationaryUnit)
                     return mine();
                 else {
-                    if(isOnResource())
+                    if (isOnResource())
                         return mine();
                     else {
                         int[] s = moveTowards(resourceX, resourceY);
                         return move(s[0], s[1]);
                     }
                 }
-            }
-            else if(goal == RETURN_RESOURCE) {
-                if(stationaryUnit) {
+            } else if (goal == RETURN_RESOURCE) {
+                if (stationaryUnit) {
                     goal = MINE;
                     return give(myDirections[homeCastle][0], myDirections[homeCastle][1], me.karbonite, me.fuel);
                 } else {
-                    if(isAdjacentTo(homeCastleUnit) > -1) {
+                    if (isAdjacentTo(homeCastleUnit) > -1) {
                         goal = MINE;
                         return give(myDirections[isAdjacentTo(homeCastleUnit)][0], myDirections[isAdjacentTo(homeCastleUnit)][1], me.karbonite, me.fuel);
                     } else {
@@ -208,25 +208,16 @@ public class MyRobot extends BCAbstractRobot {
                         return move(s[0], s[1]);
                     }
                 }
-            }
-            else if(goal == TRAVEL) {
+            } else if (goal == TRAVEL) {
                 log("I'm a traveler");
             }
-        }
+        } else if (me.unit == SPECS.CRUSADER) {
 
-        else if(me.unit == SPECS.CRUSADER) {
-
-        }
-
-        else if(me.unit == SPECS.PROPHET) {
+        } else if (me.unit == SPECS.PROPHET) {
             return move(1, 1);
-        }
+        } else if (me.unit == SPECS.PREACHER) {
 
-        else if(me.unit == SPECS.PREACHER) {
-
-        }
-
-        else {
+        } else {
             log("This unit is not a known unit");
         }
     }
@@ -237,17 +228,16 @@ public class MyRobot extends BCAbstractRobot {
     //Returns an array of the correct movement option to eventually attain posX and posY
     public int[] moveTowards(int posX, int posY) {
         int[] s = new int[2];
-        if(me.unit == SPECS.PILGRIM || me.unit == SPECS.PROPHET || me.unit == SPECS.PREACHER) {
-            if(distanceBetween(me.x, me.y, posX, posY) <= 2) {
-                if(!isEmpty(posX - me.x, posY - me.y)) {
+        if (me.unit == SPECS.PILGRIM || me.unit == SPECS.PROPHET || me.unit == SPECS.PREACHER) {
+            if (distanceBetween(me.x, me.y, posX, posY) <= 2) {
+                if (!isEmpty(posX - me.x, posY - me.y)) {
                     s[0] = myDirections[findOpenBuildSpot(directionTo(posX, posY))][0]; //Move adjacent if occupied
                     s[1] = myDirections[findOpenBuildSpot(directionTo(posX, posY))][1]; //Move adjacent if occupied
                 } else {
                     s[0] = posX - me.x;
                     s[1] = posY - me.y;
                 }
-            }
-            else {
+            } else {
                 int direction = directionTo(posX, posY);
                 s = tryMove(direction);
             }
@@ -257,10 +247,10 @@ public class MyRobot extends BCAbstractRobot {
 
     //Finds the closest-to-optimal direction as an array
     public int[] tryMove(int pref) {
-        if(isEmpty(pathDiagonal[pref][0], pathDiagonal[pref][1])) {
+        if (isEmpty(pathDiagonal[pref][0], pathDiagonal[pref][1])) {
             return pathDiagonal[pref];
         }
-        if(pref%2 == 1) { //if diagonal
+        if (pref % 2 == 1) { //if diagonal
             pref += pathDiagonal.length;
             for (int i = 1; i < 5; i++) {
                 if (isEmpty(pathDiagonal[(pref + i) % pathDiagonal.length][0], pathDiagonal[(pref + i) % pathDiagonal.length][1]))
@@ -280,15 +270,15 @@ public class MyRobot extends BCAbstractRobot {
     //Broadcasts 2 numbers between 0 and 63 inclusive
     public void broadcast(int radius_squared, int message1, int message2) {
         log("Broadcasting: " + String.valueOf(message1) + "," + String.valueOf(message2));
-        signal(message2*64 + message1, radius_squared);
+        signal(message2 * 64 + message1, radius_squared);
     }
 
     //Interprets a signal into 2 numbers
     public int[] decodeSignal(Robot sender) {
         int[] signal = new int[2];
         int value = sender.signal;
-        signal[0] = value%64;
-        signal[1] = (int)value/64;
+        signal[0] = value % 64;
+        signal[1] = (int) value / 64;
         log("Decoding Signal: " + String.valueOf(signal[0]) + "," + String.valueOf(signal[1]));
         return signal;
     }
@@ -296,22 +286,22 @@ public class MyRobot extends BCAbstractRobot {
     //Bradcast Location on castle talk. broadcasts 64 if me.x == 0
     public void broadcastLocationX() {
         castleTalk(me.x);
-        if(me.x == 0)
+        if (me.x == 0)
             castleTalk(64);
     }
 
     //Bradcast Location on castle talk. braodcasts 64 if me.y == 0
     public void broadcastLocationY() {
         castleTalk(me.y);
-        if(me.y == 0)
+        if (me.y == 0)
             castleTalk(64);
     }
 
     //Learn the X position of all castles
     public void determineFriendlyCastlesX() {
-        for(int i = 0; i < robots.length; i++) {
-            if(robots[i].castle_talk > 0 && robots[i].team == myTeam) {
-                if(robots[i].castle_talk == 64)
+        for (int i = 0; i < robots.length; i++) {
+            if (robots[i].castle_talk > 0 && robots[i].team == myTeam) {
+                if (robots[i].castle_talk == 64)
                     friendlyCastlesX.add(0);
                 else
                     friendlyCastlesX.add(robots[i].castle_talk);
@@ -325,10 +315,10 @@ public class MyRobot extends BCAbstractRobot {
 
     //Learn the Y position of all castles
     public void determineFriendlyCastlesY() {
-        for(int h = 0; h < friendlyCastlesId.size(); h++) {
-            for(int i = 0; i < robots.length; i++) {
-                if(robots[i].id == (int)friendlyCastlesId.get(h)) {
-                    if(robots[i].castle_talk == 64)
+        for (int h = 0; h < friendlyCastlesId.size(); h++) {
+            for (int i = 0; i < robots.length; i++) {
+                if (robots[i].id == (int) friendlyCastlesId.get(h)) {
+                    if (robots[i].castle_talk == 64)
                         friendlyCastlesY.add(0);
                     else
                         friendlyCastlesY.add(robots[i].castle_talk);
@@ -341,10 +331,10 @@ public class MyRobot extends BCAbstractRobot {
 
     //Calculates the locations of all enemy castles
     public void determineEnemyCastles() {
-        for(int i = 0; i < friendlyCastlesX.size(); i++) {
-            if(symmetry == VERTICAL) {
+        for (int i = 0; i < friendlyCastlesX.size(); i++) {
+            if (symmetry == VERTICAL) {
                 enemyCastlesX.add(mapLength - (int) friendlyCastlesX.get(i) - 1);
-                enemyCastlesY.add((int)friendlyCastlesY.get(i));
+                enemyCastlesY.add((int) friendlyCastlesY.get(i));
             } else {
                 enemyCastlesX.add((int) friendlyCastlesX.get(i));
                 enemyCastlesY.add(mapLength - (int) friendlyCastlesY.get(i) - 1);
@@ -356,13 +346,12 @@ public class MyRobot extends BCAbstractRobot {
     //Records if the map is horizontally or vertically symmetric.
     //Depending on the map it is possible this method will fail but it is not likely.
     public void determineSymmetry() {
-        for(int i = 0; i < mapLength/2; i++) {
-            if(map[i][i] != map[mapLength - 1 - i][mapLength - 1 - i]) {
-                if(map[i][mapLength - 1 - i] == map[i][i]) {
+        for (int i = 0; i < mapLength / 2; i++) {
+            if (map[i][i] != map[mapLength - 1 - i][mapLength - 1 - i]) {
+                if (map[i][mapLength - 1 - i] == map[i][i]) {
                     symmetry = VERTICAL;
                     //log("Symmetry: VERTICAL");
-                }
-                else {
+                } else {
                     symmetry = HORIZONTAL;
                     //log("Symmetry: HORIZONTAL");
                 }
@@ -375,19 +364,19 @@ public class MyRobot extends BCAbstractRobot {
 
     //Locates Resources within a radius of a castle or church
     public void findNearbyResources() {
-        for(int i = 0; i < 2*castleClusterRadius + 1; i++) {
-            int myHeight = 2*i + 1;
-            if(i > castleClusterRadius + 1)
-                myHeight = 2*(2*castleClusterRadius - i) + 1;
-            for(int j = 0; j < myHeight; j++) {
-                if(offMap(i - castleClusterRadius + me.x, j - (myHeight - 1)/2 + me.y))
+        for (int i = 0; i < 2 * castleClusterRadius + 1; i++) {
+            int myHeight = 2 * i + 1;
+            if (i > castleClusterRadius + 1)
+                myHeight = 2 * (2 * castleClusterRadius - i) + 1;
+            for (int j = 0; j < myHeight; j++) {
+                if (offMap(i - castleClusterRadius + me.x, j - (myHeight - 1) / 2 + me.y))
                     continue;
-                if(isAdjacentToTile(i - castleClusterRadius, j - (myHeight - 1)/2)) {
+                if (isAdjacentToTile(i - castleClusterRadius, j - (myHeight - 1) / 2)) {
                     continue; //Don't count adjacent resources as they are already in the adjacent tile array
                 }
-                if(hasResource(i - castleClusterRadius, j - (myHeight - 1)/2)) {
+                if (hasResource(i - castleClusterRadius, j - (myHeight - 1) / 2)) {
                     nearbyResourceX.add(i - castleClusterRadius + me.x);
-                    nearbyResourceY.add(j - (myHeight - 1)/2 + me.y);
+                    nearbyResourceY.add(j - (myHeight - 1) / 2 + me.y);
                 }
             }
         }
@@ -395,21 +384,21 @@ public class MyRobot extends BCAbstractRobot {
 
     //Checks to see if there is a resource dx, dy from me
     public boolean hasResource(int dx, int dy) {
-        if(offMap(me.x + dx, me.y + dy))
+        if (offMap(me.x + dx, me.y + dy))
             return false;
         return karboniteMap[me.y + dy][me.x + dx] || fuelMap[me.y + dy][me.x + dx];
     }
 
     //Checks if tile posX, posY is off map
     public boolean offMap(int posX, int posY) {
-        if(posX >= mapLength || posY >= mapLength || posX < 0 || posY < 0)
+        if (posX >= mapLength || posY >= mapLength || posX < 0 || posY < 0)
             return true;
         return false;
     }
 
     //Checks to see if the tile dx and dy away from me is passable.
     public boolean isPassable(int dx, int dy) {
-        if(offMap(me.x + dx, me.y + dy))
+        if (offMap(me.x + dx, me.y + dy))
             return false;
         return map[me.y + dy][me.x + dx];
     }
@@ -419,11 +408,11 @@ public class MyRobot extends BCAbstractRobot {
         int posX = me.x + dx;
         int posY = me.y + dy;
 
-        if(offMap(posX, posY))
+        if (offMap(posX, posY))
             return false;
 
-        for(int i = 0; i < robots.length; i++) {
-            if(robots[i].x == posX && robots[i].y == posY) {
+        for (int i = 0; i < robots.length; i++) {
+            if (robots[i].x == posX && robots[i].y == posY) {
                 return true;
             }
         }
@@ -439,17 +428,17 @@ public class MyRobot extends BCAbstractRobot {
     //The pref in the preffered direction to build in
     //The int returned in the myDirections index of the correct direction
     public int findOpenBuildSpot(int pref) {
-        if(isEmpty(myDirections[pref%myDirections.length][0], myDirections[pref%myDirections.length][1]))
-            return pref%myDirections.length;
+        if (isEmpty(myDirections[pref % myDirections.length][0], myDirections[pref % myDirections.length][1]))
+            return pref % myDirections.length;
 
-        for(int i = 1; i < 5; i++) {
-            if(isEmpty(myDirections[(pref + i)%myDirections.length][0], myDirections[(pref + i)%myDirections.length][1])) //Clockwise
-                return (pref + i)%myDirections.length;
+        for (int i = 1; i < 5; i++) {
+            if (isEmpty(myDirections[(pref + i) % myDirections.length][0], myDirections[(pref + i) % myDirections.length][1])) //Clockwise
+                return (pref + i) % myDirections.length;
 
             pref += myDirections.length;
 
-            if(isEmpty(myDirections[(pref - i)%myDirections.length][0], myDirections[(pref - i)%myDirections.length][1])) //Counterclockwise
-                return (pref - i)%myDirections.length;
+            if (isEmpty(myDirections[(pref - i) % myDirections.length][0], myDirections[(pref - i) % myDirections.length][1])) //Counterclockwise
+                return (pref - i) % myDirections.length;
             pref -= myDirections.length;
         }
         log("No open positions");
@@ -468,8 +457,8 @@ public class MyRobot extends BCAbstractRobot {
 
     //Return the direction a robots is in if adjacent. Otherwise returns -1
     public int isAdjacentTo(Robot r) {
-        for(int i = 0; i < myDirections.length; i++) {
-            if(r.x == me.x + myDirections[i][0] && r.y == me.y + myDirections[i][1])
+        for (int i = 0; i < myDirections.length; i++) {
+            if (r.x == me.x + myDirections[i][0] && r.y == me.y + myDirections[i][1])
                 return i;
         }
         return -1;
@@ -477,7 +466,7 @@ public class MyRobot extends BCAbstractRobot {
 
     //Checks if tile dx, dy away is adjacent to me
     public boolean isAdjacentToTile(int dx, int dy) {
-        if(Math.abs(dx) < 2 && Math.abs(dy) < 2)
+        if (Math.abs(dx) < 2 && Math.abs(dy) < 2)
             return true;
         return false;
     }
@@ -507,7 +496,7 @@ public class MyRobot extends BCAbstractRobot {
         homeCastleUnit = findAdjacentCastleUnit();
         homeCastleUnitX = homeCastleUnit.x;
         homeCastleUnitY = homeCastleUnit.y;
-        if(!isOnResource()) {
+        if (!isOnResource()) {
             stationaryUnit = false;
             goal = LISTEN;
         } else
@@ -515,10 +504,10 @@ public class MyRobot extends BCAbstractRobot {
     }
 
     public int findAdjacentCastle() {
-        for(int i = 0; i < robots.length; i++) {
-            if(robots[i].unit == SPECS.CASTLE) {
+        for (int i = 0; i < robots.length; i++) {
+            if (robots[i].unit == SPECS.CASTLE) {
                 int direction = isAdjacentTo(robots[i]);
-                if(direction > -1)
+                if (direction > -1)
                     return direction;
             }
         }
@@ -526,8 +515,8 @@ public class MyRobot extends BCAbstractRobot {
     }
 
     public Robot findAdjacentCastleUnit() {
-        for(int i = 0; i < robots.length; i++) {
-            if(robots[i].unit == SPECS.CASTLE && isAdjacentTo(robots[i]) > -1) {
+        for (int i = 0; i < robots.length; i++) {
+            if (robots[i].unit == SPECS.CASTLE && isAdjacentTo(robots[i]) > -1) {
                 return robots[i];
             }
         }
@@ -536,9 +525,9 @@ public class MyRobot extends BCAbstractRobot {
 
     //Scans the map and finds the location of clusters on the map (prioritizes karbonite)
     public void findClusters() {
-        for(int i = 0; i < mapLength; i++) {
-            for(int j = 0; j < mapLength; j++) {
-                if(karboniteMap[j][i]) {
+        for (int i = 0; i < mapLength; i++) {
+            for (int j = 0; j < mapLength; j++) {
+                if (karboniteMap[j][i]) {
                     if (!isClusterNearby(i, j)) {
                         clusterX.add(i);
                         clusterY.add(j);
@@ -550,8 +539,8 @@ public class MyRobot extends BCAbstractRobot {
 
     //Returns if there is already a cluster point close to a resource deopt to prevent double clustering
     public boolean isClusterNearby(int x, int y) {
-        for(int i = 0; i < clusterX.size(); i++) {
-            if(distanceBetween(x, y, (int) clusterX.get(i), (int) clusterY.get(i)) < clusterRadius)
+        for (int i = 0; i < clusterX.size(); i++) {
+            if (distanceBetween(x, y, (int) clusterX.get(i), (int) clusterY.get(i)) < clusterRadius)
                 return true;
         }
         return false;
@@ -562,8 +551,8 @@ public class MyRobot extends BCAbstractRobot {
     //Note: this method does not remove clusters near other castles so as of right now it may end up sending
     //Pilgrims to other castles as if it were a cluster
     public void removeClustersNearCastle() {
-        for(int i = 0; i < clusterX.size(); i++) {
-            if(distanceBetween(me.x, me.y, (int) clusterX.get(i), (int) clusterY.get(i)) < castleClusterRadius) {
+        for (int i = 0; i < clusterX.size(); i++) {
+            if (distanceBetween(me.x, me.y, (int) clusterX.get(i), (int) clusterY.get(i)) < castleClusterRadius) {
                 clusterX.remove(i);
                 clusterY.remove(i);
                 i--;
@@ -573,20 +562,20 @@ public class MyRobot extends BCAbstractRobot {
 
     //Same as above but does it for all other castles
     public void removeClustersNearCastles() {
-        for(int h = 0; h < friendlyCastles; h++) {
-            if(me.id == (int)friendlyCastlesId.get(h))
+        for (int h = 0; h < friendlyCastles; h++) {
+            if (me.id == (int) friendlyCastlesId.get(h))
                 continue;
-            for(int i = 0; i < clusterX.size(); i++) {
-                if(distanceBetween((int)friendlyCastlesX.get(h), (int)friendlyCastlesY.get(h), (int)clusterX.get(i), (int)clusterY.get(i)) < castleClusterRadius) {
+            for (int i = 0; i < clusterX.size(); i++) {
+                if (distanceBetween((int) friendlyCastlesX.get(h), (int) friendlyCastlesY.get(h), (int) clusterX.get(i), (int) clusterY.get(i)) < castleClusterRadius) {
                     clusterX.remove(i);
                     clusterY.remove(i);
                     i--;
                 }
             }
         }
-        for(int h = 0; h < enemyCastles; h++) {
-            for(int i = 0; i < clusterX.size(); i++) {
-                if(distanceBetween((int)enemyCastlesX.get(h), (int)enemyCastlesY.get(h), (int)clusterX.get(i), (int)clusterY.get(i)) < castleClusterRadius) {
+        for (int h = 0; h < enemyCastles; h++) {
+            for (int i = 0; i < clusterX.size(); i++) {
+                if (distanceBetween((int) enemyCastlesX.get(h), (int) enemyCastlesY.get(h), (int) clusterX.get(i), (int) clusterY.get(i)) < castleClusterRadius) {
                     clusterX.remove(i);
                     clusterY.remove(i);
                     i--;
@@ -598,17 +587,17 @@ public class MyRobot extends BCAbstractRobot {
     //Adds any adjacent resources to a castle or church to its adjacent array
     public void findAdjacentResources() {
         //log("Finding Adjacent Resources");
-        for(int i = 0; i < myDirections.length; i++) {
-            if(offMap(me.x + myDirections[i][0], me.y + myDirections[i][1]))
+        for (int i = 0; i < myDirections.length; i++) {
+            if (offMap(me.x + myDirections[i][0], me.y + myDirections[i][1]))
                 continue; //Skips spots off the map
-            if(karboniteMap[me.y + myDirections[i][1]][me.x + myDirections[i][0]]) {
+            if (karboniteMap[me.y + myDirections[i][1]][me.x + myDirections[i][0]]) {
                 adjacentResource.add(i);
             }
         }
-        for(int i = 0; i < myDirections.length; i++) {
-            if(offMap(me.x + myDirections[i][0], me.y + myDirections[i][1]))
+        for (int i = 0; i < myDirections.length; i++) {
+            if (offMap(me.x + myDirections[i][0], me.y + myDirections[i][1]))
                 continue; //Skips spots off the map
-            if(fuelMap[me.y + myDirections[i][1]][me.x + myDirections[i][0]]) {
+            if (fuelMap[me.y + myDirections[i][1]][me.x + myDirections[i][0]]) {
                 adjacentResource.add(i);
             }
         }
@@ -625,26 +614,114 @@ public class MyRobot extends BCAbstractRobot {
     }
 
     //Returns the direction to a specific position from the robot. Returns NORTH if the robot is already on the spot
-    public int directionTo(int posX, int posY) {
-        if(posX < me.x) {
-            if(posY < me.y)
+    public int directionTo(int posX, int posY)
+    {
+        if (posX < me.x)
+        {
+            if (posY < me.y)
                 return 7; //NORTHWEST
-            else if(posY > me.y)
+            else if (posY > me.y)
                 return 5; //SOUTHWEST
             else
                 return 6; //WEST
-        } else if(posX > me.x) {
-            if(posY > me.y)
+        }
+        else if (posX > me.x)
+        {
+            if (posY > me.y)
                 return 3; //SOUTHEAST
-            else if(posY < me.y)
+            else if (posY < me.y)
                 return 1; //NORTHEAST
             else
                 return 2; //EAST
-        } else {
-            if(posY > me.y)
+        }
+        else
+        {
+            if (posY > me.y)
                 return 4; //SOUTH
             else
                 return 0; //NORTH
         }
     }
+
+    //this will be the list of movements that will be returned from pathfinder
+    Stack<Integer> directionStack;
+
+    List<Object> openList = new
+
+    //convert the map into a nodal representation
+    //pass in what type you want to move towards -- will return movement object
+
+    /*
+    // A* Search Algorithm
+1.  Initialize the open list
+2.  Initialize the closed list
+put the starting node on the open
+list (you can leave its f at zero)
+
+3.  while the open list is not empty
+a) find the node with the least f on
+   the open list, call it "q"
+
+b) pop q off the open list
+
+c) generate q's 8 successors and set their
+   parents to q
+
+d) for each successor
+    i) if successor is the goal, stop search
+      successor.g = q.g + distance between
+                          successor and q
+      successor.h = distance from goal to
+      successor (This can be done using many
+      ways, we will discuss three heuristics-
+      Manhattan, Diagonal and Euclidean
+      Heuristics)
+
+      successor.f = successor.g + successor.h
+
+    ii) if a node with the same position as
+        successor is in the OPEN list which has a
+       lower f than successor, skip this successor
+
+    iii) if a node with the same position as
+        successor  is in the CLOSED list which has
+        a lower f than successor, skip this successor
+        otherwise, add  the node to the open list
+ end (for loop)
+
+e) push q on the closed list
+end (while loop)
+     */
+    public void buildNodeMap(int[][] stop)
+    {
+       List<Object> openList = new List<Object>();
+       List<Object> closedList = new List<Object>();
+
+    }
+
+    //build nodeMap
+    public void buildNodeMap()
+    {
+
+    }
+
+    //class ---------------------------------------------
+
+    public class nodeMap
+    {
+        /*
+        1 - karbonite
+        2 - fuel
+        3 - general map
+         */
+        int type = 0;
+    }
+
+    public class node
+    {
+        //if this is destination
+        boolean target = false;
+
+    }
+
 }
