@@ -711,7 +711,6 @@ end (while loop)
         {
             while (openList.isEmpty() == false)
             {
-
                 //find element in list that has the smallest f value
                 int selectedIndex;
 
@@ -724,13 +723,14 @@ end (while loop)
                     if ((tempNode.f < smallestF ) || (i == 0))
                     {
                         selectedIndex = i;
+                        smallestF = tempNode.f;
                     }
                 }
 
                 //pop target element out of list
                 selectedNode = openList.get(selectedIndex);
-
                 openList.remove(selectedIndex); //remove the selectedNode from the list
+
 
                 //generate the 8 successors to the selected node
                 /*
