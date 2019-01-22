@@ -45,6 +45,8 @@ public class MyRobot extends BCAbstractRobot {
     boolean stationaryUnit = true;
     int homeCastle; //A direction
     Robot homeCastleUnit;
+    int homeCastleUnitX;
+    int homeCastleUnitY;
     int resourceX;
     int resourceY;
 
@@ -60,6 +62,14 @@ public class MyRobot extends BCAbstractRobot {
 
     //Call this array to cycle through all directions easily
     int[][] myDirections = {NORTH, NORTHEAST, EAST, SOUTHEAST, SOUTH, SOUTHWEST, WEST, NORTHWEST};
+
+    //Pathfinding Directions
+    int[] DOUBLE_NORTH = {0, -2};
+    int[] DOUBLE_EAST = {2, 0};
+    int[] DOUBLE_SOUTH = {0, 2};
+    int[] DOUBLE_WEST = {-2, 0};
+
+    int[][] pathDiagonal = {DOUBLE_NORTH, NORTHEAST, DOUBLE_EAST, SOUTHEAST, DOUBLE_SOUTH, SOUTHWEST, DOUBLE_WEST, NORTHWEST};
 
     Robot[] robots; //At the beginning of each turn this array will be filled with all robots visible to me
     ArrayList clusterX;
@@ -179,8 +189,10 @@ public class MyRobot extends BCAbstractRobot {
                 else {
                     if(isOnResource())
                         return mine();
-                    else
-                        log("Moving towards resource");
+                    else {
+                        int[] s = moveTowards(resourceX, resourceY);
+                        return move(s[0], s[1]);
+                    }
                 }
             }
             else if(goal == RETURN_RESOURCE) {
@@ -192,7 +204,8 @@ public class MyRobot extends BCAbstractRobot {
                         goal = MINE;
                         return give(myDirections[isAdjacentTo(homeCastleUnit)][0], myDirections[isAdjacentTo(homeCastleUnit)][1], me.karbonite, me.fuel);
                     } else {
-                        //Move towards homeCastle
+                        int[] s = moveTowards(homeCastleUnitX, homeCastleUnitY);
+                        return move(s[0], s[1]);
                     }
                 }
             }
@@ -220,6 +233,49 @@ public class MyRobot extends BCAbstractRobot {
 
 
     //Methods --------------------
+
+    //Returns an array of the correct movement option to eventually attain posX and posY
+    public int[] moveTowards(int posX, int posY) {
+        int[] s = new int[2];
+        if(me.unit == SPECS.PILGRIM || me.unit == SPECS.PROPHET || me.unit == SPECS.PREACHER) {
+            if(distanceBetween(me.x, me.y, posX, posY) <= 2) {
+                if(!isEmpty(posX - me.x, posY - me.y)) {
+                    s[0] = myDirections[findOpenBuildSpot(directionTo(posX, posY))][0]; //Move adjacent if occupied
+                    s[1] = myDirections[findOpenBuildSpot(directionTo(posX, posY))][1]; //Move adjacent if occupied
+                } else {
+                    s[0] = posX - me.x;
+                    s[1] = posY - me.y;
+                }
+            }
+            else {
+                int direction = directionTo(posX, posY);
+                s = tryMove(direction);
+            }
+            return s;
+        }
+    }
+
+    //Finds the closest-to-optimal direction as an array
+    public int[] tryMove(int pref) {
+        if(isEmpty(pathDiagonal[pref][0], pathDiagonal[pref][1])) {
+            return pathDiagonal[pref];
+        }
+        if(pref%2 == 1) { //if diagonal
+            pref += pathDiagonal.length;
+            for (int i = 1; i < 5; i++) {
+                if (isEmpty(pathDiagonal[(pref + i) % pathDiagonal.length][0], pathDiagonal[(pref + i) % pathDiagonal.length][1]))
+                    return pathDiagonal[(pref + i) % pathDiagonal.length];
+
+                if (isEmpty(pathDiagonal[(pref - i) % pathDiagonal.length][0], pathDiagonal[(pref - i) % pathDiagonal.length][1]))
+                    return pathDiagonal[(pref - i) % pathDiagonal.length];
+            }
+        }
+        pref -= pathDiagonal.length;
+        int[] s = new int[2];
+        s[0] = myDirections[findOpenBuildSpot(pref)][0];
+        s[1] = myDirections[findOpenBuildSpot(pref)][1];
+        return s; //If all else fails or trying to go straight
+    }
 
     //Broadcasts 2 numbers between 0 and 63 inclusive
     public void broadcast(int radius_squared, int message1, int message2) {
@@ -445,8 +501,12 @@ public class MyRobot extends BCAbstractRobot {
 
     //The init function for pilgrims
     public void initializePilgrim() {
+        myTeam = me.team;
+        mapLength = map.length;
         homeCastle = findAdjacentCastle();
         homeCastleUnit = findAdjacentCastleUnit();
+        homeCastleUnitX = homeCastleUnit.x;
+        homeCastleUnitY = homeCastleUnit.y;
         if(!isOnResource()) {
             stationaryUnit = false;
             goal = LISTEN;
