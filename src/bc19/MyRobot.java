@@ -27,15 +27,16 @@ public class MyRobot extends BCAbstractRobot {
     int maxKarbonite = 20;
     int maxFuel = 100;
 
-    int UNKOWN = -1;
+    int UNKNOWN = -1;
     int MINE = 0;
     int RETURN_RESOURCE = 1;
     int SPAWN_ADJACENT = 2;
     int SPAWN_NEARBY = 3;
     int LISTEN = 4;
     int TRAVEL = 5;
+    int SPAWN_TRAVELER = 6;
 
-    int goal = UNKOWN;
+    int goal = UNKNOWN;
 
     //Unit Variables
     int destinationX;
@@ -59,6 +60,8 @@ public class MyRobot extends BCAbstractRobot {
     int[] SOUTHWEST = {-1, 1};
     int[] WEST = {-1, 0};
     int[] NORTHWEST = {-1, -1};
+
+    int[] STATIONARY = {0, 0};
 
     //Call this array to cycle through all directions easily
     int[][] myDirections = {NORTH, NORTHEAST, EAST, SOUTHEAST, SOUTH, SOUTHWEST, WEST, NORTHWEST};
@@ -96,14 +99,16 @@ public class MyRobot extends BCAbstractRobot {
 
     //Turn ---------------------------------------------
 
-    public Action turn() {
+    public Action turn()
+    {
         robots = getVisibleRobots();
         step++;
 
-        if(me.unit == SPECS.CASTLE) {
-
+        if(me.unit == SPECS.CASTLE)
+        {
             //First Turn
-            if(step == 0) {
+            if(step == 0)
+            {
                 log("Let's go");
                 initializeCastle();
                 determineSymmetry();
@@ -119,11 +124,17 @@ public class MyRobot extends BCAbstractRobot {
                 findNearbyResources();
 
                 broadcastLocationX();
-            } else if(step == 1) {
+            }
+            else if(step == 1)
+            {
                 determineFriendlyCastlesX();
-            } else if(step == 2) {
+            }
+            else if(step == 2)
+            {
                 broadcastLocationY();
-            } else if(step == 3) {
+            }
+            else if(step == 3)
+            {
                 determineFriendlyCastlesY();
                 determineEnemyCastles();
                 removeClustersNearCastles();
@@ -132,27 +143,59 @@ public class MyRobot extends BCAbstractRobot {
 
             // Goals -----------------------------------
 
-            if(goal == SPAWN_ADJACENT) { //Spawn pilgrims on resources adjacent to this castle
+            if(goal == SPAWN_ADJACENT) //Spawn pilgrims on resources adjacent to this castle
+            {
                 if(adjacentResource.size() < 1)
                     goal = SPAWN_NEARBY;
-                else {
+                else if(canBuild(SPECS.PILGRIM))
+                {
                     int direction = findOpenBuildSpot((int)adjacentResource.get(0));
-                    adjacentResource.remove(0);
-                    //log("Building pilgrim for adjacent resource");
-                    return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                    if(direction > -1)
+                    {
+                        adjacentResource.remove(0);
+                        //log("Building pilgrim for adjacent resource");
+                        return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                    }
                 }
             }
-            if(goal == SPAWN_NEARBY) { //Spawn a pilgrim to handle resources within a radius of the castle
+            if(goal == SPAWN_NEARBY) //Spawn a pilgrim to handle resources within a radius of the castle
+            {
                 if(nearbyResourceX.size() < 1)
-                    goal = UNKOWN;
-                else {
+                {
+                    if(step >= 3)
+                        goal = SPAWN_TRAVELER;
+                }
+                else if(canBuild(SPECS.PILGRIM))
+                {
                     int direction = directionTo((int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
                     direction = findOpenBuildSpot(direction);
-                    broadcast(adjacentBroadcastingRaduis, (int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
-                    nearbyResourceX.remove(0);
-                    nearbyResourceY.remove(0);
-                    //log("Building a pilgrim for nearby resource");
-                    return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                    if(direction > -1)
+                    {
+                        broadcast(adjacentBroadcastingRaduis, (int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
+                        nearbyResourceX.remove(0);
+                        nearbyResourceY.remove(0);
+                        //log("Building a pilgrim for nearby resource");
+                        return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                    }
+                }
+            }
+            if(goal == SPAWN_TRAVELER)
+            {
+                if(clusterX.size() < 1)
+                    goal = UNKNOWN;
+                else if(canBuild(SPECS.PILGRIM) )
+                {
+                    //log("Building traveler");
+                    int direction = directionTo((int)clusterX.get(0), (int)clusterY.get(0));
+                    direction = findOpenBuildSpot(direction);
+                    if(direction > -1)
+                    {
+                        broadcast(adjacentBroadcastingRaduis, (int)clusterX.get(0), (int)clusterY.get(0)); //Fix radius
+                        clusterX.remove(0);
+                        clusterY.remove(0);
+                        //log("Building a pilgrim for nearby resource");
+                        return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                    }
                 }
             }
 
@@ -161,72 +204,98 @@ public class MyRobot extends BCAbstractRobot {
 
         // Church ---------------------------------------------------------------------------
 
-        else if(me.unit == SPECS.CHURCH) {
+        else if(me.unit == SPECS.CHURCH)
+        {
 
         }
 
-        else if(me.unit == SPECS.PILGRIM) {
-            if(step == 0) { //First Turn
+        else if(me.unit == SPECS.PILGRIM)
+        {
+            if(step == 0) //First Turn
+            {
                 initializePilgrim();
             }
 
-            if(goal == LISTEN) {
+            if(goal == LISTEN)
+            {
                 int[] temp = decodeSignal(homeCastleUnit);
                 resourceX = temp[0];
                 resourceY = temp[1];
                 if(distanceBetween(me.x, me.y, resourceX, resourceY) <= castleClusterRadius)
+                {
                     goal = MINE;
+                    //log("I'm a nearby");
+                }
                 else
+                {
+                    log("I'm a traveler");
                     goal = TRAVEL;
+                }
             }
-            if(hasMaxResource()) {
+            if(hasMaxResource())
+            {
                 goal = RETURN_RESOURCE;
             }
 
-            if(goal == MINE) {
+            if(goal == MINE)
+            {
                 if(stationaryUnit)
                     return mine();
-                else {
-                    if(isOnResource())
+                else
+                {
+                    if(isOnResource()) //Fix to check if on the specific resource it needs to be on
                         return mine();
-                    else {
+                    else
+                    {
                         int[] s = moveTowards(resourceX, resourceY);
                         return move(s[0], s[1]);
                     }
                 }
             }
-            else if(goal == RETURN_RESOURCE) {
-                if(stationaryUnit) {
+            else if(goal == RETURN_RESOURCE)
+            {
+                if(stationaryUnit)
+                {
                     goal = MINE;
                     return give(myDirections[homeCastle][0], myDirections[homeCastle][1], me.karbonite, me.fuel);
-                } else {
-                    if(isAdjacentTo(homeCastleUnit) > -1) {
+                }
+                else
+                {
+                    if(isAdjacentTo(homeCastleUnit) > -1)
+                    {
                         goal = MINE;
                         return give(myDirections[isAdjacentTo(homeCastleUnit)][0], myDirections[isAdjacentTo(homeCastleUnit)][1], me.karbonite, me.fuel);
-                    } else {
+                    }
+                    else
+                    {
                         int[] s = moveTowards(homeCastleUnitX, homeCastleUnitY);
                         return move(s[0], s[1]);
                     }
                 }
             }
-            else if(goal == TRAVEL) {
-                log("I'm a traveler");
+            else if(goal == TRAVEL)
+            {
+
             }
         }
 
-        else if(me.unit == SPECS.CRUSADER) {
+        else if(me.unit == SPECS.CRUSADER)
+        {
 
         }
 
-        else if(me.unit == SPECS.PROPHET) {
+        else if(me.unit == SPECS.PROPHET)
+        {
             return move(1, 1);
         }
 
-        else if(me.unit == SPECS.PREACHER) {
+        else if(me.unit == SPECS.PREACHER)
+        {
 
         }
 
-        else {
+        else
+        {
             log("This unit is not a known unit");
         }
     }
@@ -234,14 +303,33 @@ public class MyRobot extends BCAbstractRobot {
 
     //Methods --------------------
 
+    public boolean canBuild(int unit) {
+        if(unit == SPECS.PILGRIM)
+            return (karbonite >= 10) && (fuel > 52);
+        else if(unit == SPECS.CRUSADER)
+            return (karbonite >= 15) && (fuel > 50);
+        else if(unit == SPECS.PROPHET)
+            return (karbonite >= 25) && (fuel > 50);
+        else if(unit == SPECS.PREACHER)
+            return (karbonite >= 30) && (fuel > 50);
+        else if(unit == SPECS.CHURCH)
+            return (karbonite >= 50 && (fuel > 200));
+        return false; //If not a unit
+    }
+
     //Returns an array of the correct movement option to eventually attain posX and posY
     public int[] moveTowards(int posX, int posY) {
         int[] s = new int[2];
         if(me.unit == SPECS.PILGRIM || me.unit == SPECS.PROPHET || me.unit == SPECS.PREACHER) {
             if(distanceBetween(me.x, me.y, posX, posY) <= 2) {
                 if(!isEmpty(posX - me.x, posY - me.y)) {
-                    s[0] = myDirections[findOpenBuildSpot(directionTo(posX, posY))][0]; //Move adjacent if occupied
-                    s[1] = myDirections[findOpenBuildSpot(directionTo(posX, posY))][1]; //Move adjacent if occupied
+                    int direction = findOpenBuildSpot(directionTo(posX, posY));
+                    if(direction > -1) {
+                        s[0] = myDirections[direction][0]; //Move adjacent if occupied
+                        s[1] = myDirections[direction][1];
+                    } else {
+                        s = STATIONARY;
+                    }
                 } else {
                     s[0] = posX - me.x;
                     s[1] = posY - me.y;
@@ -257,9 +345,8 @@ public class MyRobot extends BCAbstractRobot {
 
     //Finds the closest-to-optimal direction as an array
     public int[] tryMove(int pref) {
-        if(isEmpty(pathDiagonal[pref][0], pathDiagonal[pref][1])) {
+        if(isEmpty(pathDiagonal[pref][0], pathDiagonal[pref][1]))
             return pathDiagonal[pref];
-        }
         if(pref%2 == 1) { //if diagonal
             pref += pathDiagonal.length;
             for (int i = 1; i < 5; i++) {
@@ -269,17 +356,22 @@ public class MyRobot extends BCAbstractRobot {
                 if (isEmpty(pathDiagonal[(pref - i) % pathDiagonal.length][0], pathDiagonal[(pref - i) % pathDiagonal.length][1]))
                     return pathDiagonal[(pref - i) % pathDiagonal.length];
             }
+            pref -= pathDiagonal.length;
         }
-        pref -= pathDiagonal.length;
         int[] s = new int[2];
-        s[0] = myDirections[findOpenBuildSpot(pref)][0];
-        s[1] = myDirections[findOpenBuildSpot(pref)][1];
-        return s; //If all else fails or trying to go straight
+        int direction = findOpenBuildSpot(pref);
+        if(direction > -1) {
+            s[0] = myDirections[direction][0];
+            s[1] = myDirections[direction][1];
+        } else {
+            s = STATIONARY;
+        }
+        return s;
     }
 
     //Broadcasts 2 numbers between 0 and 63 inclusive
     public void broadcast(int radius_squared, int message1, int message2) {
-        log("Broadcasting: " + String.valueOf(message1) + "," + String.valueOf(message2));
+        //log("Broadcasting: " + String.valueOf(message1) + "," + String.valueOf(message2));
         signal(message2*64 + message1, radius_squared);
     }
 
@@ -626,25 +718,31 @@ public class MyRobot extends BCAbstractRobot {
 
     //Returns the direction to a specific position from the robot. Returns NORTH if the robot is already on the spot
     public int directionTo(int posX, int posY) {
+        int i;
         if(posX < me.x) {
             if(posY < me.y)
-                return 7; //NORTHWEST
+                i =  7; //NORTHWEST
             else if(posY > me.y)
-                return 5; //SOUTHWEST
+                i = 5; //SOUTHWEST
             else
-                return 6; //WEST
+                i = 6; //WEST
         } else if(posX > me.x) {
             if(posY > me.y)
-                return 3; //SOUTHEAST
+                i = 3; //SOUTHEAST
             else if(posY < me.y)
-                return 1; //NORTHEAST
+                i = 1; //NORTHEAST
             else
-                return 2; //EAST
+                i = 2; //EAST
         } else {
             if(posY > me.y)
-                return 4; //SOUTH
-            else
-                return 0; //NORTH
+                i = 4; //SOUTH
+            else if(posY < me.y)
+                i = 0; //NORTH
+            else {
+                log("DirectionTo not found.");
+                i = -1;
+            }
         }
+        return i;
     }
 }
