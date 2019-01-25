@@ -6,11 +6,11 @@ import java.util.ArrayList;
 
 public class MyRobot extends BCAbstractRobot {
 
-    /*
-    Note: the variables posX and posY always refer to the actual poition on the map (as in map[posY][posX]
-        the variables dx and dy always refer to the distance from me
-        (me is the variable for the robot currently running)
-     */
+   /*
+   Note: the variables posX and posY always refer to the actual poition on the map (as in map[posY][posX]
+       the variables dx and dy always refer to the distance from me
+       (me is the variable for the robot currently running)
+    */
 
     private int step = -1;
 
@@ -81,6 +81,8 @@ public class MyRobot extends BCAbstractRobot {
     private Robot[] robots; //At the beginning of each turn this array will be filled with all robots visible to me
     private ArrayList clusterX;
     private ArrayList clusterY;
+    private ArrayList clusterSize;
+    private ArrayList clusterId;
     //Clusters don't count if they are near a castle
 
     //Castle variables
@@ -95,6 +97,11 @@ public class MyRobot extends BCAbstractRobot {
     private ArrayList enemyCastlesY;
 
     private boolean symmetry;
+    private boolean loneCastle = false;
+
+    private int rivalCastleX;
+    private int rivalCastleY;
+    private int distanceFromRival;
 
     private boolean HORIZONTAL = true;
     private boolean VERTICAL = false;
@@ -125,6 +132,9 @@ public class MyRobot extends BCAbstractRobot {
                 findNearbyResources();
 
                 broadcastLocationX();
+
+                initialScan();
+
             } else if (step == 1) {
                 determineFriendlyCastlesX();
             } else if (step == 2) {
@@ -134,6 +144,27 @@ public class MyRobot extends BCAbstractRobot {
                 determineEnemyCastles();
                 removeClustersNearCastles();
                 log("Clusters: " + String.valueOf(clusterY.size()));
+            }
+
+            else { // Every Turn ------------------------------
+                for(int i = 0; i < robots.length; i++)
+                {
+                    int message = robots[i].castle_talk;
+                    if(message == 0 || robots[i] == me)
+                        continue;
+                    if(robots[i].unit == SPECS.CASTLE) {
+                        log("Receiving a message");
+                        for (int j = 0; j < clusterId.size(); j++) {
+                            if (message == (int) clusterId.get(j)) {
+                                log("The message recieved is " + String.valueOf(message) + " removing cluster number " + String.valueOf(j));
+                                clusterX.remove(j);
+                                clusterY.remove(j);
+                                clusterSize.remove(j);
+                                clusterId.remove(j);
+                            }
+                        }
+                    }
+                }
             }
 
             // Goals -----------------------------------
@@ -154,7 +185,7 @@ public class MyRobot extends BCAbstractRobot {
             if (goal == SPAWN_NEARBY) //Spawn a pilgrim to handle resources within a radius of the castle
             {
                 if (nearbyResourceX.size() < 1) {
-                    if (step >= 3)
+                    if (step >= 4)
                         goal = SPAWN_TRAVELER;
                 } else if (canBuild(SPECS.PILGRIM)) {
                     int direction = directionTo((int) nearbyResourceX.get(0), (int) nearbyResourceY.get(0));
@@ -179,6 +210,10 @@ public class MyRobot extends BCAbstractRobot {
                         broadcast(adjacentBroadcastingRaduis, (int) clusterX.get(0), (int) clusterY.get(0)); //Fix radius
                         clusterX.remove(0);
                         clusterY.remove(0);
+                        clusterSize.remove(0);
+                        log("Sending traveler. Broadcasting: " + String.valueOf(clusterId.get(0)));
+                        castleTalk((int)clusterId.get(0));
+                        clusterId.remove(0);
                         //log("Building a pilgrim for nearby resource");
                         return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
                     }
@@ -333,6 +368,23 @@ public class MyRobot extends BCAbstractRobot {
 
 
     //Methods --------------------
+
+    //Does an initial scan for a castle, not knowing where the other castles are
+    void initialScan() {
+        if(robots.length < 2) {
+            log("Lone Castle.");
+            loneCastle = true;
+        }
+        distanceFromRival = distanceBetween(me.x, me.y, rivalCastleX, rivalCastleY);
+        log(String.valueOf(distanceFromRival) + " tiles from rival castle");
+        if (symmetry == VERTICAL) {
+            rivalCastleX = mapLength - me.x - 1;
+            rivalCastleY = me.y;
+        } else {
+            rivalCastleX = me.x;
+            rivalCastleY = mapLength - me.y - 1;
+        }
+    }
 
     //Returns a direction to build a church is (empty and no resource)
     int findChurchBuildSpot(int pref) {
@@ -638,6 +690,8 @@ public class MyRobot extends BCAbstractRobot {
         goal = SPAWN_ADJACENT;
         clusterX = new ArrayList();
         clusterY = new ArrayList();
+        clusterSize = new ArrayList();
+        clusterId = new ArrayList();
         adjacentResource = new ArrayList();
         nearbyResourceX = new ArrayList();
         nearbyResourceY = new ArrayList();
@@ -701,6 +755,8 @@ public class MyRobot extends BCAbstractRobot {
                     if (!isClusterNearby(i, j)) {
                         clusterX.add(i);
                         clusterY.add(j);
+                        clusterSize.add(1);
+                        clusterId.add(clusterId.size() + 1);
                     }
                 }
             }
@@ -710,8 +766,10 @@ public class MyRobot extends BCAbstractRobot {
     //Returns if there is already a cluster point close to a resource deopt to prevent double clustering
     boolean isClusterNearby(int x, int y) {
         for (int i = 0; i < clusterX.size(); i++) {
-            if (distanceBetween(x, y, (int) clusterX.get(i), (int) clusterY.get(i)) < clusterRadius)
+            if (distanceBetween(x, y, (int) clusterX.get(i), (int) clusterY.get(i)) < clusterRadius) {
+                clusterSize.set(i, (int)clusterSize.get(i) + 1);
                 return true;
+            }
         }
         return false;
     }
@@ -722,9 +780,12 @@ public class MyRobot extends BCAbstractRobot {
     //Pilgrims to other castles as if it were a cluster
     void removeClustersNearCastle() {
         for (int i = 0; i < clusterX.size(); i++) {
-            if (distanceBetween(me.x, me.y, (int) clusterX.get(i), (int) clusterY.get(i)) < castleClusterRadius) {
+            if (distanceBetween(me.x, me.y, (int) clusterX.get(i), (int) clusterY.get(i)) < castleClusterRadius
+                    || distanceBetween(rivalCastleX, rivalCastleY, (int) clusterX.get(i), (int) clusterY.get(i)) < castleClusterRadius) {
                 clusterX.remove(i);
                 clusterY.remove(i);
+                clusterSize.remove(i);
+                clusterId.remove(i);
                 i--;
             }
         }
@@ -739,6 +800,8 @@ public class MyRobot extends BCAbstractRobot {
                 if (distanceBetween((int) friendlyCastlesX.get(h), (int) friendlyCastlesY.get(h), (int) clusterX.get(i), (int) clusterY.get(i)) < castleClusterRadius) {
                     clusterX.remove(i);
                     clusterY.remove(i);
+                    clusterSize.remove(i);
+                    clusterId.remove(i);
                     i--;
                 }
             }
@@ -748,6 +811,8 @@ public class MyRobot extends BCAbstractRobot {
                 if (distanceBetween((int) enemyCastlesX.get(h), (int) enemyCastlesY.get(h), (int) clusterX.get(i), (int) clusterY.get(i)) < castleClusterRadius) {
                     clusterX.remove(i);
                     clusterY.remove(i);
+                    clusterSize.remove(i);
+                    clusterId.remove(i);
                     i--;
                 }
             }
@@ -827,58 +892,58 @@ public class MyRobot extends BCAbstractRobot {
 
 
 
-    /*
-    // A* Search Algorithm
- 1.  Initialize the open list
- 2.  Initialize the closed list
- put the starting node on the open
- list (you can leave its f at zero)
+   /*
+   // A* Search Algorithm
+1.  Initialize the open list
+2.  Initialize the closed list
+put the starting node on the open
+list (you can leave its f at zero)
 
 
 
- 3.  while the open list is not empty
- a) find the node with the least f on
-   the open list, call it "q"
+3.  while the open list is not empty
+a) find the node with the least f on
+  the open list, call it "q"
 
 
 
- b) pop q off the open list
+b) pop q off the open list
 
 
 
- c) generate q's 8 successors and set their
-   parents to q
+c) generate q's 8 successors and set their
+  parents to q
 
 
- d) for each successor
-    i) if successor is the goal, stop search
-      successor.g = q.g + distance between
-                          successor and q
-      successor.h = distance from goal to
-      successor (This can be done using many
-      ways, we will discuss three heuristics-
-      Manhattan, Diagonal and Euclidean
-      Heuristics)
+d) for each successor
+   i) if successor is the goal, stop search
+     successor.g = q.g + distance between
+                         successor and q
+     successor.h = distance from goal to
+     successor (This can be done using many
+     ways, we will discuss three heuristics-
+     Manhattan, Diagonal and Euclidean
+     Heuristics)
 
 
-      successor.f = successor.g + successor.h
+     successor.f = successor.g + successor.h
 
 
-    ii) if a node with the same position as
-        successor is in the OPEN list which has a
-       lower f than successor, skip this successor
+   ii) if a node with the same position as
+       successor is in the OPEN list which has a
+      lower f than successor, skip this successor
 
 
-    iii) if a node with the same position as
-        successor  is in the CLOSED list which has
-        a lower f than successor, skip this successor
-        otherwise, add  the node to the open list
- end (for loop)
+   iii) if a node with the same position as
+       successor  is in the CLOSED list which has
+       a lower f than successor, skip this successor
+       otherwise, add  the node to the open list
+end (for loop)
 
 
- e) push q on the closed list
- end (while loop)
-     */
+e) push q on the closed list
+end (while loop)
+    */
 
     public void findPath(int[][] stop)
     {
@@ -901,51 +966,53 @@ public class MyRobot extends BCAbstractRobot {
 
         //try
         //{
-            while (openList.isEmpty() == false)
+        while (openList.isEmpty() == false)
+        {
+            //find element in list that has the smallest f value
+            int selectedIndex;
+
+
+            //go through all of the elements in the list and select index of target node
+            for (int i = 0; i < openList.size(); i++)
             {
-                //find element in list that has the smallest f value
-                int selectedIndex;
+                int smallestF = 0;
+                tempNode = (node)openList.get(i);
 
 
-                //go through all of the elements in the list and select index of target node
-                for (int i = 0; i < openList.size(); i++)
+                if ((tempNode.f < smallestF ) || (i == 0))
                 {
-                    int smallestF = 0;
-                    tempNode = (node)openList.get(i);
-
-
-                    if ((tempNode.f < smallestF ) || (i == 0))
-                    {
-                        selectedIndex = i;
-                        smallestF = tempNode.f;
-                    }
+                    selectedIndex = i;
+                    smallestF = tempNode.f;
                 }
-
-
-                //pop target element out of list
-                selectedNode = (node)openList.get(selectedIndex);
-                openList.remove(selectedIndex); //remove the selectedNode from the list
-
-
-
-
-                //generate the 8 successors to the selected node
-               /*
-               for (int j = 0; j < 8; j++)
-               {
-                   node newNode = new node();
-                   newNode.x = selectedNode.x - 1;
-                   newNode.y = selectedNode.y + 1;
-
-
-                   //need to find all adjacent blocks, check if they are valid blocks FIRST
-               }
-               */
-
             }
+
+
+            //pop target element out of list
+            selectedNode = (node)openList.get(selectedIndex);
+            openList.remove(selectedIndex); //remove the selectedNode from the list
+
+
+
+
+            //generate the 8 successors to the selected node
+              /*
+              for (int j = 0; j < 8; j++)
+              {
+                  node newNode = new node();
+                  newNode.x = selectedNode.x - 1;
+                  newNode.y = selectedNode.y + 1;
+
+
+                  //need to find all adjacent blocks, check if they are valid blocks FIRST
+              }
+              */
+
+        }
         //}
     }
 }
+
+
 
 
 
