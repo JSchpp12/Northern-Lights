@@ -35,6 +35,7 @@ public class MyRobot extends BCAbstractRobot {
     int LISTEN = 4;
     int TRAVEL = 5;
     int SPAWN_TRAVELER = 6;
+    int BUILD_CHURCH = 7;
 
     int goal = UNKNOWN;
 
@@ -206,14 +207,68 @@ public class MyRobot extends BCAbstractRobot {
 
         else if(me.unit == SPECS.CHURCH)
         {
+            if(step == 0) //First Turn
+            {
+                initializeChurch();
+                findAdjacentResources();
+                findNearbyResources();
+            }
 
+            if(goal == SPAWN_ADJACENT) //Spawn pilgrims on resources adjacent to this church
+            {
+                if(adjacentResource.size() < 1)
+                    goal = SPAWN_NEARBY;
+                else if(canBuild(SPECS.PILGRIM))
+                {
+                    int direction = findOpenBuildSpot((int)adjacentResource.get(0));
+                    if(direction > -1)
+                    {
+                        adjacentResource.remove(0);
+                        return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                    }
+                }
+            }
+            if(goal == SPAWN_NEARBY) //Spawn a pilgrim to handle resources within a radius of the church
+            {
+                if(nearbyResourceX.size() < 1)
+                {
+                    goal = UNKNOWN;
+                }
+                else if(canBuild(SPECS.PILGRIM))
+                {
+                    int direction = directionTo((int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
+                    direction = findOpenBuildSpot(direction);
+                    if(direction > -1)
+                    {
+                        broadcast(adjacentBroadcastingRaduis, (int)nearbyResourceX.get(0), (int)nearbyResourceY.get(0));
+                        nearbyResourceX.remove(0);
+                        nearbyResourceY.remove(0);
+                        //log("Building a pilgrim for nearby resource");
+                        return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                    }
+                }
+            }
         }
+
+        // Pilgrim --------------------------------------------------------------------------
 
         else if(me.unit == SPECS.PILGRIM)
         {
             if(step == 0) //First Turn
             {
                 initializePilgrim();
+            }
+
+
+            if(hasMaxResource() && goal != BUILD_CHURCH)
+            {
+                goal = RETURN_RESOURCE;
+            }
+            if(homeCastle == -1) {
+                homeCastle = findAdjacentCastle();
+                homeCastleUnit = findAdjacentCastleUnit();
+                homeCastleUnitX = homeCastleUnit.x;
+                homeCastleUnitY = homeCastleUnit.y;
             }
 
             if(goal == LISTEN)
@@ -232,18 +287,13 @@ public class MyRobot extends BCAbstractRobot {
                     goal = TRAVEL;
                 }
             }
-            if(hasMaxResource())
-            {
-                goal = RETURN_RESOURCE;
-            }
-
             if(goal == MINE)
             {
                 if(stationaryUnit)
                     return mine();
                 else
                 {
-                    if(isOnResource()) //Fix to check if on the specific resource it needs to be on
+                    if(onDestination())
                         return mine();
                     else
                     {
@@ -275,19 +325,54 @@ public class MyRobot extends BCAbstractRobot {
             }
             else if(goal == TRAVEL)
             {
-
+                if(onDestination())
+                {
+                    goal = BUILD_CHURCH;
+                }
+                else
+                {
+                    int[] s = moveTowards(resourceX, resourceY);
+                    return move(s[0], s[1]);
+                }
+            }
+            if(goal == BUILD_CHURCH)
+            {
+                if(canBuild(SPECS.CHURCH))
+                {
+                    int direction = findChurchBuildSpot(1);
+                    goal = MINE;
+                    stationaryUnit = true;
+                    homeCastleUnit = null;
+                    homeCastleUnitX = -1;
+                    homeCastleUnitY = -1;
+                    homeCastle = -1;
+                    if(direction > -1)
+                        return buildUnit(SPECS.CHURCH, myDirections[direction][0], myDirections[direction][1]);
+                    else
+                        log("No spots to build church");
+                }
+                else
+                {
+                    return mine();
+                }
             }
         }
+
+        // Crusader ------------------------------------------------------
 
         else if(me.unit == SPECS.CRUSADER)
         {
 
         }
 
+        // Prophet --------------------------------------------------------
+
         else if(me.unit == SPECS.PROPHET)
         {
             return move(1, 1);
         }
+
+        // Preacher -------------------------------------------------------
 
         else if(me.unit == SPECS.PREACHER)
         {
@@ -303,6 +388,34 @@ public class MyRobot extends BCAbstractRobot {
 
     //Methods --------------------
 
+    //Returns a direction to build a church is (empty and no resource)
+    public int findChurchBuildSpot(int pref) {
+        if(isEmpty(myDirections[pref%myDirections.length][0], myDirections[pref%myDirections.length][1])
+                && !hasResource(myDirections[pref%myDirections.length][0], myDirections[pref%myDirections.length][1]))
+            return pref%myDirections.length;
+
+        for(int i = 1; i < 5; i++) {
+            if(isEmpty(myDirections[(pref + i)%myDirections.length][0], myDirections[(pref + i)%myDirections.length][1])
+                    && !hasResource(myDirections[(pref + i)%myDirections.length][0], myDirections[(pref + i)%myDirections.length][1])) //Clockwise
+                return (pref + i)%myDirections.length;
+
+            pref += myDirections.length;
+
+            if(isEmpty(myDirections[(pref - i)%myDirections.length][0], myDirections[(pref - i)%myDirections.length][1])
+                    && !hasResource(myDirections[(pref - i)%myDirections.length][0], myDirections[(pref - i)%myDirections.length][1])) //Counterclockwise
+                return (pref - i)%myDirections.length;
+            pref -= myDirections.length;
+        }
+        log("No open positions");
+        return -1;
+    }
+
+    //Returns if a pilgrim is on its correct resource
+    public boolean onDestination() {
+        return me.x == resourceX && me.y == resourceY;
+    }
+
+    //Returns if there is enough resources to build the unit in question
     public boolean canBuild(int unit) {
         if(unit == SPECS.PILGRIM)
             return (karbonite >= 10) && (fuel > 52);
@@ -350,10 +463,10 @@ public class MyRobot extends BCAbstractRobot {
         if(pref%2 == 1) { //if diagonal
             pref += pathDiagonal.length;
             for (int i = 1; i < 5; i++) {
-                if (isEmpty(pathDiagonal[(pref + i) % pathDiagonal.length][0], pathDiagonal[(pref + i) % pathDiagonal.length][1]))
+                if(isEmpty(pathDiagonal[(pref + i) % pathDiagonal.length][0], pathDiagonal[(pref + i) % pathDiagonal.length][1]))
                     return pathDiagonal[(pref + i) % pathDiagonal.length];
 
-                if (isEmpty(pathDiagonal[(pref - i) % pathDiagonal.length][0], pathDiagonal[(pref - i) % pathDiagonal.length][1]))
+                if(isEmpty(pathDiagonal[(pref - i) % pathDiagonal.length][0], pathDiagonal[(pref - i) % pathDiagonal.length][1]))
                     return pathDiagonal[(pref - i) % pathDiagonal.length];
             }
             pref -= pathDiagonal.length;
@@ -591,6 +704,16 @@ public class MyRobot extends BCAbstractRobot {
         enemyCastlesY = new ArrayList();
     }
 
+    //The init function for churches
+    public void initializeChurch() {
+        myTeam = me.team;
+        mapLength = map.length;
+        goal = SPAWN_ADJACENT;
+        adjacentResource = new ArrayList();
+        nearbyResourceX = new ArrayList();
+        nearbyResourceY = new ArrayList();
+    }
+
     //The init function for pilgrims
     public void initializePilgrim() {
         myTeam = me.team;
@@ -608,7 +731,7 @@ public class MyRobot extends BCAbstractRobot {
 
     public int findAdjacentCastle() {
         for(int i = 0; i < robots.length; i++) {
-            if(robots[i].unit == SPECS.CASTLE) {
+            if(robots[i].unit == SPECS.CASTLE || robots[i].unit == SPECS.CHURCH) {
                 int direction = isAdjacentTo(robots[i]);
                 if(direction > -1)
                     return direction;
@@ -619,7 +742,7 @@ public class MyRobot extends BCAbstractRobot {
 
     public Robot findAdjacentCastleUnit() {
         for(int i = 0; i < robots.length; i++) {
-            if(robots[i].unit == SPECS.CASTLE && isAdjacentTo(robots[i]) > -1) {
+            if((robots[i].unit == SPECS.CASTLE || robots[i].unit == SPECS.CHURCH) && isAdjacentTo(robots[i]) > -1) {
                 return robots[i];
             }
         }
@@ -693,14 +816,14 @@ public class MyRobot extends BCAbstractRobot {
         for(int i = 0; i < myDirections.length; i++) {
             if(offMap(me.x + myDirections[i][0], me.y + myDirections[i][1]))
                 continue; //Skips spots off the map
-            if(karboniteMap[me.y + myDirections[i][1]][me.x + myDirections[i][0]]) {
+            if(karboniteMap[me.y + myDirections[i][1]][me.x + myDirections[i][0]] && !isOccupied(myDirections[i][0], myDirections[i][1])) {
                 adjacentResource.add(i);
             }
         }
         for(int i = 0; i < myDirections.length; i++) {
             if(offMap(me.x + myDirections[i][0], me.y + myDirections[i][1]))
                 continue; //Skips spots off the map
-            if(fuelMap[me.y + myDirections[i][1]][me.x + myDirections[i][0]]) {
+            if(fuelMap[me.y + myDirections[i][1]][me.x + myDirections[i][0]] && !isOccupied(myDirections[i][0], myDirections[i][1])) {
                 adjacentResource.add(i);
             }
         }
