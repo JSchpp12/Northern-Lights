@@ -868,4 +868,171 @@ public class MyRobot extends BCAbstractRobot {
         }
         return i;
     }
+
+
+    //this will be the list of movements that will be returned from pathfinder
+    Stack<Integer> directionStack;
+
+
+
+    List<Object> openList = new
+
+
+
+    //convert the map into a nodal representation
+    //pass in what type you want to move towards -- will return movement object
+
+
+
+    /*
+    // A* Search Algorithm
+ 1.  Initialize the open list
+ 2.  Initialize the closed list
+ put the starting node on the open
+ list (you can leave its f at zero)
+
+
+
+ 3.  while the open list is not empty
+ a) find the node with the least f on
+   the open list, call it "q"
+
+
+
+ b) pop q off the open list
+
+
+
+ c) generate q's 8 successors and set their
+   parents to q
+
+
+ d) for each successor
+    i) if successor is the goal, stop search
+      successor.g = q.g + distance between
+                          successor and q
+      successor.h = distance from goal to
+      successor (This can be done using many
+      ways, we will discuss three heuristics-
+      Manhattan, Diagonal and Euclidean
+      Heuristics)
+
+
+      successor.f = successor.g + successor.h
+
+
+    ii) if a node with the same position as
+        successor is in the OPEN list which has a
+       lower f than successor, skip this successor
+
+
+    iii) if a node with the same position as
+        successor  is in the CLOSED list which has
+        a lower f than successor, skip this successor
+        otherwise, add  the node to the open list
+ end (for loop)
+
+
+ e) push q on the closed list
+ end (while loop)
+     */
+    public void findPath(int[][] stop)
+    {
+        node tempNode; //temporary node storage
+        node selectedNode; //node with the smallest f value in openList
+
+
+        List<Object> openList = new List<Object>();
+        List<Object> closedList = new List<Object>();
+
+
+        //create starting node and put it in the openList -- leave f = 0
+
+
+        node startNode = new node();
+        startNode.x = = me.x;
+        startNode.y = me.y;
+        openList.add(startNode);
+
+
+        try
+        {
+            while (openList.isEmpty() == false)
+            {
+                //find element in list that has the smallest f value
+                int selectedIndex;
+
+
+                //go through all of the elements in the list and select index of target node
+                for (int i = 0; i < openList.size(); i++)
+                {
+                    int smallestF = 0;
+                    tempNode = openList.get(i);
+
+
+                    if ((tempNode.f < smallestF ) || (i == 0))
+                    {
+                        selectedIndex = i;
+                        smallestF = tempNode.f;
+                    }
+                }
+
+
+                //pop target element out of list
+                selectedNode = openList.get(selectedIndex);
+                openList.remove(selectedIndex); //remove the selectedNode from the list
+
+
+
+
+                //generate the 8 successors to the selected node
+               /*
+               for (int j = 0; j < 8; j++)
+               {
+                   node newNode = new node();
+                   newNode.x = selectedNode.x - 1;
+                   newNode.y = selectedNode.y + 1;
+
+
+                   //need to find all adjacent blocks, check if they are valid blocks FIRST
+               }
+               */
+            }
+        }
+    }
+}
+
+
+public class nodeMap
+{
+    /*
+    1 - karbonite
+    2 - fuel
+    3 - general map
+     */
+    int type = 0;
+}
+}
+
+
+public class node
+{
+
+
+    node parentNode;
+
+
+    successors = new node[8]; //place to store the successor nodes around this node
+
+
+    //x and y are this node's corrdinates
+    int x = 0;
+    int y = 0;
+
+
+
+    //these values are used in A* algorithm
+    int g = 0;
+    int k = 0;
+    int f = 0;
 }
