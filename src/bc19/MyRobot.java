@@ -6,11 +6,11 @@ import java.util.ArrayList;
 
 public class MyRobot extends BCAbstractRobot {
 
-   /*
-   Note: the variables posX and posY always refer to the actual poition on the map (as in map[posY][posX]
-       the variables dx and dy always refer to the distance from me
-       (me is the variable for the robot currently running)
-    */
+  /*
+  Note: the variables posX and posY always refer to the actual poition on the map (as in map[posY][posX]
+      the variables dx and dy always refer to the distance from me
+      (me is the variable for the robot currently running)
+   */
 
     private int step = -1;
 
@@ -39,8 +39,28 @@ public class MyRobot extends BCAbstractRobot {
     private int TRAVEL = 5;
     private int SPAWN_TRAVELER = 6;
     private int BUILD_CHURCH = 7;
+    private int GET_FUEL = 8;
+    private int MAKE_PROPHETS = 9;
+    private int SENTRY = 10;
+    private int RUSH = 11;
+    private int MAKE_PREACHERS = 12;
+    private int PREPARE = 13;
+    private int STANDBY = 14;
+    private int COUNTDOWN = 15;
+    private int SPAWN_GUARDER = 16;
 
     private int goal = UNKNOWN;
+
+
+    private int UNDEFINED = 0;
+    private int RUSHDOWN = 1;
+    private int COVER = 2;
+    private int GATHER = 3;
+    private int AGGRESIVE_CLUSTER = 4;
+    private int HOME_BOI = 5;
+    private int AFTERMATH = 6;
+
+    private int state = UNDEFINED;
 
     //Unit Variables
     int destinationX;
@@ -86,9 +106,12 @@ public class MyRobot extends BCAbstractRobot {
     //Clusters don't count if they are near a castle
 
     //Castle variables
-    private ArrayList adjacentResource;
-    private ArrayList nearbyResourceX;
-    private ArrayList nearbyResourceY;
+    private ArrayList adjacentKarbonite;
+    private ArrayList adjacentFuel;
+    private ArrayList nearbyKarboniteX;
+    private ArrayList nearbyFuelX;
+    private ArrayList nearbyKarboniteY;
+    private ArrayList nearbyFuelY;
 
     private ArrayList friendlyCastlesX;
     private ArrayList friendlyCastlesY;
@@ -99,14 +122,25 @@ public class MyRobot extends BCAbstractRobot {
     private boolean symmetry;
     private boolean loneCastle = false;
 
+    private int karboniteBuffer; //How much karbinoite should be saved
+    private int fuelBuffer;
+
     private int rivalCastleX;
     private int rivalCastleY;
     private int distanceFromRival;
+    private int directionToRival;
 
     private boolean HORIZONTAL = true;
     private boolean VERTICAL = false;
 
     private int myTeam;
+
+
+    private int prophetStation = 8;
+    private int preacherStation = 6;
+    private int preacherCount;
+    private boolean moreFuel = true;
+    private boolean firstCastle = true;
 
     //Turn ---------------------------------------------
 
@@ -120,9 +154,11 @@ public class MyRobot extends BCAbstractRobot {
                 log("Let's go");
                 initializeCastle();
                 determineSymmetry();
+                initialScan();
 
                 findClusters();
                 removeClustersNearCastle();
+                orderClusters();
 
                 //for(int i = 0; i < clusterY.size(); i++) { //List Clusters
                 //log("Cluster: (" + String.valueOf(clusterX.get(i)) + "," + String.valueOf(clusterY.get(i)) + ")");
@@ -133,7 +169,9 @@ public class MyRobot extends BCAbstractRobot {
 
                 broadcastLocationX();
 
-                initialScan();
+                determineState();
+                checkIfNoClusters();
+                isFirstCastle();
 
             } else if (step == 1) {
                 determineFriendlyCastlesX();
@@ -144,26 +182,75 @@ public class MyRobot extends BCAbstractRobot {
                 determineEnemyCastles();
                 removeClustersNearCastles();
                 log("Clusters: " + String.valueOf(clusterY.size()));
+                checkIfNoClusters();
             }
 
             else { // Every Turn ------------------------------
+                karboniteBuffer = 0;
                 for(int i = 0; i < robots.length; i++)
                 {
                     int message = robots[i].castle_talk;
                     if(message == 0 || robots[i] == me)
                         continue;
-                    if(robots[i].unit == SPECS.CASTLE) {
-                        log("Receiving a message");
+                    if(message <= 20) { //Asks if any pilgrims were sent to a cluster
                         for (int j = 0; j < clusterId.size(); j++) {
                             if (message == (int) clusterId.get(j)) {
-                                log("The message recieved is " + String.valueOf(message) + " removing cluster number " + String.valueOf(j));
                                 clusterX.remove(j);
                                 clusterY.remove(j);
                                 clusterSize.remove(j);
                                 clusterId.remove(j);
                             }
                         }
+                    } else if(message <= 100) { //Asks if a pilgrim is asking for excess resources
+                        karboniteBuffer += message - 20;
                     }
+                }
+                //log("Karbonite Buffer: " + String.valueOf(karboniteBuffer));
+            }
+
+            if(enemyNearby()) //Attack Check
+            {
+                if(karbonite >= 30 && fuel >= 50) {
+                    for(int i = 0; i < robots.length; i++) {
+                        if(robots[i].unit == SPECS.PREACHER && robots[i].team != myTeam) {
+                            int direction = directionTo(robots[i].x, robots[i].y);
+                            return buildUnit(SPECS.PREACHER, myDirections[direction][0], myDirections[direction][1]);
+                        }
+                    }
+                }
+                int[] s = determineTarget();
+                return attack(s[0], s[1]);
+            }
+
+            // States ----------------------------------
+
+            if(state == RUSHDOWN)
+            {
+                if(karbonite > 10) {
+                    if(canBuild(SPECS.PREACHER)) {
+                        int direction = findOpenBuildSpot(directionToRival);
+                        if (direction > -1) {
+                            return buildUnit(SPECS.PREACHER, myDirections[direction][0], myDirections[direction][1]);
+                        }
+                    }
+                }
+                state = AFTERMATH;
+                goal = SPAWN_ADJACENT;
+            }
+            if(state == AFTERMATH) //Right now just converts back to normal bot, should change that later
+            {
+
+            }
+            if(state == AGGRESIVE_CLUSTER)
+            {
+                if(firstCastle) {
+                    goal = SPAWN_TRAVELER;
+                } else {
+                    state = GATHER;
+                    clusterX.remove(0);
+                    clusterY.remove(0);
+                    clusterSize.remove(0);
+                    clusterId.remove(0);
                 }
             }
 
@@ -171,12 +258,12 @@ public class MyRobot extends BCAbstractRobot {
 
             if (goal == SPAWN_ADJACENT) //Spawn pilgrims on resources adjacent to this castle
             {
-                if (adjacentResource.size() < 1)
+                if (adjacentKarbonite.size() < 1)
                     goal = SPAWN_NEARBY;
                 else if (canBuild(SPECS.PILGRIM)) {
-                    int direction = findOpenBuildSpot((int) adjacentResource.get(0));
+                    int direction = findOpenBuildSpot((int) adjacentKarbonite.get(0));
                     if (direction > -1) {
-                        adjacentResource.remove(0);
+                        adjacentKarbonite.remove(0);
                         //log("Building pilgrim for adjacent resource");
                         return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
                     }
@@ -184,24 +271,40 @@ public class MyRobot extends BCAbstractRobot {
             }
             if (goal == SPAWN_NEARBY) //Spawn a pilgrim to handle resources within a radius of the castle
             {
-                if (nearbyResourceX.size() < 1) {
-                    if (step >= 4)
-                        goal = SPAWN_TRAVELER;
+                if (nearbyKarboniteX.size() < 1) {
+                    if (step >= 4) { //Maybe 3
+                        if(state == GATHER)
+                            goal = SPAWN_TRAVELER;
+                        else
+                            goal = SPAWN_GUARDER;
+                    }
+                    else
+                        goal = GET_FUEL;
                 } else if (canBuild(SPECS.PILGRIM)) {
-                    int direction = directionTo((int) nearbyResourceX.get(0), (int) nearbyResourceY.get(0));
+                    int direction = directionTo((int) nearbyKarboniteX.get(0), (int) nearbyKarboniteY.get(0));
                     direction = findOpenBuildSpot(direction);
                     if (direction > -1) {
-                        broadcast(adjacentBroadcastingRaduis, (int) nearbyResourceX.get(0), (int) nearbyResourceY.get(0));
-                        nearbyResourceX.remove(0);
-                        nearbyResourceY.remove(0);
+                        broadcast(adjacentBroadcastingRaduis, (int) nearbyKarboniteX.get(0), (int) nearbyKarboniteY.get(0));
+                        nearbyKarboniteX.remove(0);
+                        nearbyKarboniteY.remove(0);
                         //log("Building a pilgrim for nearby resource");
                         return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
                     }
                 }
             }
+            if(goal == SPAWN_GUARDER)
+            {
+                goal = SPAWN_TRAVELER;
+            }
             if (goal == SPAWN_TRAVELER) {
-                if (clusterX.size() < 1)
-                    goal = UNKNOWN;
+                if (clusterX.size() < 1) {
+                    if(moreFuel) {
+                        goal = GET_FUEL;
+                    } else {
+                        goal = MAKE_PROPHETS;
+                    }
+                }
+
                 else if (canBuild(SPECS.PILGRIM)) {
                     //log("Building traveler");
                     int direction = directionTo((int) clusterX.get(0), (int) clusterY.get(0));
@@ -211,11 +314,92 @@ public class MyRobot extends BCAbstractRobot {
                         clusterX.remove(0);
                         clusterY.remove(0);
                         clusterSize.remove(0);
-                        log("Sending traveler. Broadcasting: " + String.valueOf(clusterId.get(0)));
-                        castleTalk((int)clusterId.get(0));
+                        //log("Sending traveler. Broadcasting: " + String.valueOf(clusterId.get(0)));
+                        if(state != AGGRESIVE_CLUSTER) {
+                            castleTalk((int)clusterId.get(0));
+                        }
                         clusterId.remove(0);
                         //log("Building a pilgrim for nearby resource");
+                        if(state == AGGRESIVE_CLUSTER) {
+                            determineState();
+                            goal = SPAWN_ADJACENT;
+                        } else {
+                            if(moreFuel) {
+                                goal = GET_FUEL;
+                            }
+                            else {
+                                if(clusterId.size() >= 1) {
+                                    goal = SPAWN_TRAVELER;
+                                }
+                                else {
+                                    goal = MAKE_PROPHETS;
+                                }
+                            }
+
+                        }
                         return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                    }
+                }
+            }
+            if(goal == GET_FUEL)
+            {
+                if (adjacentFuel.size() > 0) {
+                    int direction = findOpenBuildSpot((int) adjacentFuel.get(0));
+                    if (direction > -1) {
+                        adjacentFuel.remove(0);
+                        //log("Building pilgrim for adjacent resource");
+                        if(step >= 4) {
+                            if(state == GATHER)
+                                goal = SPAWN_TRAVELER;
+                            else
+                                goal = SPAWN_GUARDER;
+                        }
+                        return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                    }
+                }
+                else if (nearbyFuelX.size() < 1) {
+                    if(step >= 4) {
+                        if(state == GATHER)
+                            goal = SPAWN_TRAVELER;
+                        else
+                            goal = SPAWN_GUARDER;
+                    }
+                    moreFuel = false;
+                } else if (canBuild(SPECS.PILGRIM)) {
+                    int direction = directionTo((int) nearbyFuelX.get(0), (int) nearbyFuelY.get(0));
+                    direction = findOpenBuildSpot(direction);
+                    if (direction > -1) {
+                        broadcast(adjacentBroadcastingRaduis, (int) nearbyFuelX.get(0), (int) nearbyFuelY.get(0));
+                        nearbyFuelX.remove(0);
+                        nearbyFuelY.remove(0);
+                        //log("Building a pilgrim for nearby resource");
+                        if(step >= 4) {
+                            if(state == GATHER)
+                                goal = SPAWN_TRAVELER;
+                            else
+                                goal = SPAWN_GUARDER;
+                        }
+                        return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                    }
+                }
+            }
+            if(goal == MAKE_PROPHETS)
+            {
+                if(state == AFTERMATH)
+                    goal = MAKE_PREACHERS;
+                else if(canBuild(SPECS.PROPHET)) {
+                    int direction = findOpenBuildSpot(directionToRival);
+                    if (direction > -1) {
+                        return buildUnit(SPECS.PROPHET, myDirections[direction][0], myDirections[direction][1]);
+                    }
+                }
+            }
+            if(goal == MAKE_PREACHERS)
+            {
+                if(canBuild(SPECS.PREACHER)) {
+                    int direction = findOpenBuildSpot(directionToRival);
+                    if (direction > -1) {
+                        return buildUnit(SPECS.PREACHER, myDirections[direction][0], myDirections[direction][1]);
                     }
                 }
             }
@@ -233,31 +417,68 @@ public class MyRobot extends BCAbstractRobot {
                 findNearbyResources();
             }
 
+            if(step > 25)
+                castleTalk(45);
+
             if (goal == SPAWN_ADJACENT) //Spawn pilgrims on resources adjacent to this church
             {
-                if (adjacentResource.size() < 1)
+                if (adjacentKarbonite.size() < 1)
                     goal = SPAWN_NEARBY;
                 else if (canBuild(SPECS.PILGRIM)) {
-                    int direction = findOpenBuildSpot((int) adjacentResource.get(0));
+                    int direction = findOpenBuildSpot((int) adjacentKarbonite.get(0));
                     if (direction > -1) {
-                        adjacentResource.remove(0);
+                        adjacentKarbonite.remove(0);
                         return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
                     }
                 }
             }
             if (goal == SPAWN_NEARBY) //Spawn a pilgrim to handle resources within a radius of the church
             {
-                if (nearbyResourceX.size() < 1) {
-                    goal = UNKNOWN;
+                if (nearbyKarboniteX.size() < 1) {
+                    goal = GET_FUEL;
                 } else if (canBuild(SPECS.PILGRIM)) {
-                    int direction = directionTo((int) nearbyResourceX.get(0), (int) nearbyResourceY.get(0));
+                    int direction = directionTo((int) nearbyKarboniteX.get(0), (int) nearbyKarboniteY.get(0));
                     direction = findOpenBuildSpot(direction);
                     if (direction > -1) {
-                        broadcast(adjacentBroadcastingRaduis, (int) nearbyResourceX.get(0), (int) nearbyResourceY.get(0));
-                        nearbyResourceX.remove(0);
-                        nearbyResourceY.remove(0);
+                        broadcast(adjacentBroadcastingRaduis, (int) nearbyKarboniteX.get(0), (int) nearbyKarboniteY.get(0));
+                        nearbyKarboniteX.remove(0);
+                        nearbyKarboniteY.remove(0);
                         //log("Building a pilgrim for nearby resource");
                         return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                    }
+                }
+            }
+            if(goal == GET_FUEL && step >= 30)
+            {
+                if (adjacentFuel.size() > 0) {
+                    if(canBuild(SPECS.PILGRIM)){
+                        int direction = findOpenBuildSpot((int) adjacentFuel.get(0));
+                        if (direction > -1) {
+                            adjacentFuel.remove(0);
+                            //log("Building pilgrim for adjacent resource");
+                            return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                        }
+                    }
+                }
+                else if (nearbyFuelX.size() < 1) {
+                    goal = UNKNOWN;
+                } else if (canBuild(SPECS.PILGRIM)) {
+                    int direction = directionTo((int) nearbyFuelX.get(0), (int) nearbyFuelY.get(0));
+                    direction = findOpenBuildSpot(direction);
+                    if (direction > -1) {
+                        broadcast(adjacentBroadcastingRaduis, (int) nearbyFuelX.get(0), (int) nearbyFuelY.get(0));
+                        nearbyFuelX.remove(0);
+                        nearbyFuelY.remove(0);
+                        //log("Building a pilgrim for nearby resource");
+                        return buildUnit(SPECS.PILGRIM, myDirections[direction][0], myDirections[direction][1]);
+                    }
+                }
+            }
+            if(step%15 == 8) {
+                if(canBuild(SPECS.PROPHET)) {
+                    int direction = findOpenBuildSpot(1);
+                    if (direction > -1) {
+                        return buildUnit(SPECS.PROPHET, myDirections[direction][0], myDirections[direction][1]);
                     }
                 }
             }
@@ -284,14 +505,22 @@ public class MyRobot extends BCAbstractRobot {
 
             if (goal == LISTEN) {
                 int[] temp = decodeSignal(homeCastleUnit);
-                resourceX = temp[0];
-                resourceY = temp[1];
-                if (distanceBetween(me.x, me.y, resourceX, resourceY) <= castleClusterRadius) {
+                if(temp[0] == -1 && temp[1] == 0)
+                {
                     goal = MINE;
-                    //log("I'm a nearby");
-                } else {
-                    log("I'm a traveler");
-                    goal = TRAVEL;
+                    stationaryUnit = true;
+                }
+                else
+                {
+                    resourceX = temp[0];
+                    resourceY = temp[1];
+                    if (distanceBetween(me.x, me.y, resourceX, resourceY) <= castleClusterRadius) {
+                        goal = MINE;
+                        //log("I'm a nearby");
+                    } else {
+                        log("I'm a traveler");
+                        goal = TRAVEL;
+                    }
                 }
             }
             if (goal == MINE) {
@@ -322,6 +551,9 @@ public class MyRobot extends BCAbstractRobot {
                 if (onDestination()) {
                     goal = BUILD_CHURCH;
                 } else {
+                    if(distanceBetween(me.x, me.y, resourceX, resourceY) <= 20) {
+                        castleTalk(40);
+                    }
                     int[] s = moveTowards(resourceX, resourceY);
                     return move(s[0], s[1]);
                 }
@@ -340,6 +572,7 @@ public class MyRobot extends BCAbstractRobot {
                     else
                         log("No spots to build church");
                 } else {
+                    castleTalk(70);
                     return mine();
                 }
             }
@@ -347,19 +580,63 @@ public class MyRobot extends BCAbstractRobot {
 
         // Crusader ------------------------------------------------------
 
-        else if (me.unit == SPECS.CRUSADER) {
-
+        else if (me.unit == SPECS.CRUSADER) { //Let's not use crusaders
+            log("I'm a crusader!");
         }
 
         // Prophet --------------------------------------------------------
 
         else if (me.unit == SPECS.PROPHET) {
-            return move(1, 1);
+            if(step == 0) { //First Turn
+                initializeProphet();
+                goal = SENTRY;
+                preacherCount = 0;
+            }
+
+            if(enemyNearby()) //Attack Check
+            {
+                int[] s = determineTarget();
+                if(s[0] == -10 && s[1] == -10) {
+                    //Run away
+                }
+                else {
+                    return attack(s[0], s[1]);
+                }
+            }
+
+            if(goal == SENTRY)
+            {
+                if(distanceFrom(homeCastleUnit) < prophetStation && preacherCount < 17) {
+                    preacherCount++;
+                    int[] s = tryMove(directionToRival);
+                    return move(s[0], s[1]);
+                }
+                if((me.x + me.y)%2 == 0 && preacherCount < 17) {
+                    preacherCount++;
+                    int[] s = moveTowards(me.x + myDirections[directionToRival][0], me.y + myDirections[directionToRival][1]);
+                    return move(s[0], s[1]);
+                }
+            }
         }
 
         // Preacher -------------------------------------------------------
 
-        else if (me.unit == SPECS.PREACHER) {
+        else if (me.unit == SPECS.PREACHER)
+        {
+            if(step == 0) { //First Turn
+                initializePreacher();
+            }
+
+            if(enemyNearby()) //Attack Check
+            {
+                log("Preacher: Enemy Nearby");
+                int[] s = determineTarget();
+                return attack(s[0], s[1]);
+            }
+
+            log("I'm Rushing!");
+            int[] s = moveTowards(rivalCastleX, rivalCastleY);
+            return move(s[0], s[1]);
 
         } else {
             log("This unit is not a known unit");
@@ -369,14 +646,137 @@ public class MyRobot extends BCAbstractRobot {
 
     //Methods --------------------
 
+    void isFirstCastle() {
+        for(int i = 0; i < robots.length; i++) {
+            if(robots[i].castle_talk > 0)
+                firstCastle = false;
+        }
+    }
+
+    void orderClusters() {
+        for(int h = 0; h < clusterSize.size() - 1; h++) {
+            for(int i = 0; i < clusterSize.size() - 1; i++) {
+                if((int)clusterSize.get(i) < (int)clusterSize.get(i + 1)) {
+                    int temp = (int)clusterSize.get(i + 1);
+                    clusterSize.set(i + 1, (int)clusterSize.get(i));
+                    clusterSize.set(i, temp);
+
+                    temp = (int)clusterId.get(i + 1);
+                    clusterId.set(i + 1, (int)clusterId.get(i));
+                    clusterId.set(i, temp);
+
+                    temp = (int)clusterX.get(i + 1);
+                    clusterX.set(i + 1, (int)clusterX.get(i));
+                    clusterX.set(i, temp);
+
+                    temp = (int)clusterY.get(i + 1);
+                    clusterY.set(i + 1, (int)clusterY.get(i));
+                    clusterY.set(i, temp);
+                }
+            }
+        }
+    }
+
+    //Returns dx, dy of target for attack
+    int[] determineTarget() {
+        int[] s = new int[2];
+        for(int i = 0; i < robots.length; i++) {
+            if(myTeam != robots[i].team) {
+                if(robots[i].unit == SPECS.CASTLE) {
+                    if(me.unit != SPECS.PROPHET || (me.x - robots[i].x)*(me.x - robots[i].x) + (me.y - robots[i].y)*(me.y - robots[i].y) >= 16) {
+                        s[0] = robots[i].x - me.x;
+                        s[1] = robots[i].y - me.y;
+                        return s;
+                    }
+                }
+            }
+        }
+        for(int i = 0; i < robots.length; i++) {
+            if(myTeam != robots[i].team) {
+                if(robots[i].unit != SPECS.PILGRIM) {
+                    if (me.unit != SPECS.PROPHET || (me.x - robots[i].x)*(me.x - robots[i].x) + (me.y - robots[i].y)*(me.y - robots[i].y) >= 16) {
+                        if((me.x - robots[i].x)*(me.x - robots[i].x) + (me.y - robots[i].y)*(me.y - robots[i].y) <= 64) {
+                            s[0] = robots[i].x - me.x;
+                            s[1] = robots[i].y - me.y;
+                            return s;
+                        }
+                    }
+                }
+            }
+        }
+        for(int i = 0; i < robots.length; i++) {
+            if(myTeam != robots[i].team) {
+                if(me.unit != SPECS.PROPHET || (me.x - robots[i].x)*(me.x - robots[i].x) + (me.y - robots[i].y)*(me.y - robots[i].y) >= 16) {
+                    if((me.x - robots[i].x)*(me.x - robots[i].x) + (me.y - robots[i].y)*(me.y - robots[i].y) <= 64) {
+                        s[0] = robots[i].x - me.x;
+                        s[1] = robots[i].y - me.y;
+                        return s;
+                    }
+                }
+            }
+        }
+        s[0] = -10;
+        s[1] = -10;
+        return s;
+    }
+
+    //Checks if any unit of opposite team is nearby
+    boolean enemyNearby() {
+        for(int i = 0; i < robots.length; i++) {
+            if(myTeam != robots[i].team)
+                return true;
+        }
+        return false;
+    }
+
+    //The function to determine the main goal of the castle
+    void determineState() {
+        if(loneCastle)
+        {
+            if(distanceFromRival <= 28)
+            {
+                log("Rushdown");
+                state = RUSHDOWN;
+                return;
+            }
+        }
+        boolean largeCluster = false;
+        for(int i = 0; i < clusterSize.size(); i++) {
+            if((int)clusterSize.get(i) > 3)
+                largeCluster = true;
+        }
+        if(largeCluster)
+        {
+            log("Pursuing Large Cluster");
+            state = AGGRESIVE_CLUSTER;
+            return;
+        }
+        if(mapLength <= 44)
+        {
+            log("Cover");
+            state = COVER;
+        }
+        else
+        {
+            log("Gather");
+            state = GATHER;
+        }
+
+    }
+
+    void checkIfNoClusters() {
+        if(clusterId.size() == 0) {
+            state = HOME_BOI;
+            log("Home Boi");
+        }
+    }
+
     //Does an initial scan for a castle, not knowing where the other castles are
     void initialScan() {
         if(robots.length < 2) {
             log("Lone Castle.");
             loneCastle = true;
         }
-        distanceFromRival = distanceBetween(me.x, me.y, rivalCastleX, rivalCastleY);
-        log(String.valueOf(distanceFromRival) + " tiles from rival castle");
         if (symmetry == VERTICAL) {
             rivalCastleX = mapLength - me.x - 1;
             rivalCastleY = me.y;
@@ -384,6 +784,9 @@ public class MyRobot extends BCAbstractRobot {
             rivalCastleX = me.x;
             rivalCastleY = mapLength - me.y - 1;
         }
+        distanceFromRival = distanceBetween(me.x, me.y, rivalCastleX, rivalCastleY);
+        directionToRival = directionTo(rivalCastleX, rivalCastleY);
+        //log(String.valueOf(distanceFromRival) + " tiles from rival castle");
     }
 
     //Returns a direction to build a church is (empty and no resource)
@@ -416,13 +819,13 @@ public class MyRobot extends BCAbstractRobot {
     //Returns if there is enough resources to build the unit in question
     boolean canBuild(int unit) {
         if (unit == SPECS.PILGRIM)
-            return (karbonite >= 10) && (fuel > 52);
+            return (karbonite - karboniteBuffer >= 10) && (fuel > 52);
         else if (unit == SPECS.CRUSADER)
-            return (karbonite >= 15) && (fuel > 50);
+            return (karbonite - karboniteBuffer >= 15) && (fuel > 50);
         else if (unit == SPECS.PROPHET)
-            return (karbonite >= 25) && (fuel > 50);
+            return (karbonite - karboniteBuffer >= 25) && (fuel > 50);
         else if (unit == SPECS.PREACHER)
-            return (karbonite >= 30) && (fuel > 50);
+            return (karbonite - karboniteBuffer >= 30) && (fuel > 50);
         else if (unit == SPECS.CHURCH)
             return (karbonite >= 50 && (fuel > 200));
         return false; //If not a unit
@@ -586,9 +989,14 @@ public class MyRobot extends BCAbstractRobot {
                 if (isAdjacentToTile(i - castleClusterRadius, j - (myHeight - 1) / 2)) {
                     continue; //Don't count adjacent resources as they are already in the adjacent tile array
                 }
-                if (hasResource(i - castleClusterRadius, j - (myHeight - 1) / 2)) {
-                    nearbyResourceX.add(i - castleClusterRadius + me.x);
-                    nearbyResourceY.add(j - (myHeight - 1) / 2 + me.y);
+                if (hasKarbonite(i - castleClusterRadius, j - (myHeight - 1) / 2) && !isOccupied(i - castleClusterRadius, j - (myHeight - 1) / 2)) {
+                    nearbyKarboniteX.add(i - castleClusterRadius + me.x);
+                    nearbyKarboniteY.add(j - (myHeight - 1) / 2 + me.y);
+                }
+                else if (hasFuel(i - castleClusterRadius, j - (myHeight - 1) / 2) && !isOccupied(i - castleClusterRadius, j - (myHeight - 1)))
+                {
+                    nearbyFuelX.add(i - castleClusterRadius + me.x);
+                    nearbyFuelY.add(j - (myHeight - 1) / 2 + me.y);
                 }
             }
         }
@@ -599,6 +1007,20 @@ public class MyRobot extends BCAbstractRobot {
         if (offMap(me.x + dx, me.y + dy))
             return false;
         return karboniteMap[me.y + dy][me.x + dx] || fuelMap[me.y + dy][me.x + dx];
+    }
+
+    //Checks to see if there is karbonite dx, dy from me
+    boolean hasKarbonite(int dx, int dy) {
+        if (offMap(me.x + dx, me.y + dy))
+            return false;
+        return karboniteMap[me.y + dy][me.x + dx];
+    }
+
+    //Checks to see if there is fuel dx, dy from me
+    boolean hasFuel(int dx, int dy) {
+        if (offMap(me.x + dx, me.y + dy))
+            return false;
+        return fuelMap[me.y + dy][me.x + dx];
     }
 
     //Checks if tile posX, posY is off map
@@ -692,9 +1114,12 @@ public class MyRobot extends BCAbstractRobot {
         clusterY = new ArrayList();
         clusterSize = new ArrayList();
         clusterId = new ArrayList();
-        adjacentResource = new ArrayList();
-        nearbyResourceX = new ArrayList();
-        nearbyResourceY = new ArrayList();
+        adjacentKarbonite = new ArrayList();
+        adjacentFuel = new ArrayList();
+        nearbyKarboniteX = new ArrayList();
+        nearbyFuelX = new ArrayList();
+        nearbyKarboniteY = new ArrayList();
+        nearbyFuelY = new ArrayList();
         friendlyCastlesX = new ArrayList();
         friendlyCastlesY = new ArrayList();
         friendlyCastlesId = new ArrayList();
@@ -707,9 +1132,13 @@ public class MyRobot extends BCAbstractRobot {
         myTeam = me.team;
         mapLength = map.length;
         goal = SPAWN_ADJACENT;
-        adjacentResource = new ArrayList();
-        nearbyResourceX = new ArrayList();
-        nearbyResourceY = new ArrayList();
+        adjacentKarbonite = new ArrayList();
+        adjacentFuel = new ArrayList();
+        nearbyKarboniteX = new ArrayList();
+        nearbyFuelX = new ArrayList();
+        nearbyKarboniteY = new ArrayList();
+        nearbyFuelY = new ArrayList();
+        karboniteBuffer = 0;
     }
 
     //The init function for pilgrims
@@ -720,11 +1149,52 @@ public class MyRobot extends BCAbstractRobot {
         homeCastleUnit = findAdjacentCastleUnit();
         homeCastleUnitX = homeCastleUnit.x;
         homeCastleUnitY = homeCastleUnit.y;
-        if (!isOnResource()) {
+        if (!isOnKarbonite()) {
             stationaryUnit = false;
             goal = LISTEN;
         } else
             goal = MINE;
+    }
+
+    //The init function for prophets
+    void initializeProphet() {
+        myTeam = me.team;
+        mapLength = map.length;
+        determineSymmetry();
+        homeCastle = findAdjacentCastle();
+        homeCastleUnit = findAdjacentCastleUnit();
+        homeCastleUnitX = homeCastleUnit.x;
+        homeCastleUnitY = homeCastleUnit.y;
+        determineRivalDirection();
+        findTargetCastle();
+    }
+
+    //The init function for preachers
+    void initializePreacher() {
+        myTeam = me.team;
+        mapLength = map.length;
+        determineSymmetry();
+        homeCastle = findAdjacentCastle();
+        homeCastleUnit = findAdjacentCastleUnit();
+        homeCastleUnitX = homeCastleUnit.x;
+        homeCastleUnitY = homeCastleUnit.y;
+        determineRivalDirection();
+        findTargetCastle();
+        goal = PREPARE;
+    }
+
+    void findTargetCastle() {
+        if (symmetry == VERTICAL) {
+            rivalCastleX = mapLength - homeCastleUnitX - 1;
+            rivalCastleY = me.y;
+        } else {
+            rivalCastleX = me.x;
+            rivalCastleY = mapLength - homeCastleUnitY - 1;
+        }
+    }
+
+    void determineRivalDirection() {
+        directionToRival = (homeCastle + 4)%myDirections.length;
     }
 
     int findAdjacentCastle() {
@@ -826,14 +1296,14 @@ public class MyRobot extends BCAbstractRobot {
             if (offMap(me.x + myDirections[i][0], me.y + myDirections[i][1]))
                 continue; //Skips spots off the map
             if (karboniteMap[me.y + myDirections[i][1]][me.x + myDirections[i][0]] && !isOccupied(myDirections[i][0], myDirections[i][1])) {
-                adjacentResource.add(i);
+                adjacentKarbonite.add(i);
             }
         }
         for (int i = 0; i < myDirections.length; i++) {
             if (offMap(me.x + myDirections[i][0], me.y + myDirections[i][1]))
                 continue; //Skips spots off the map
             if (fuelMap[me.y + myDirections[i][1]][me.x + myDirections[i][0]] && !isOccupied(myDirections[i][0], myDirections[i][1])) {
-                adjacentResource.add(i);
+                adjacentFuel.add(i);
             }
         }
     }
@@ -841,6 +1311,11 @@ public class MyRobot extends BCAbstractRobot {
     //Checks to see if unit is standing on a resource
     boolean isOnResource() {
         return karboniteMap[me.y][me.x] || fuelMap[me.y][me.x];
+    }
+
+    //Checks to see if unit is standing on karbonite
+    boolean isOnKarbonite() {
+        return karboniteMap[me.y][me.x];
     }
 
     //Checks to see if unit is naxed out on a resource
@@ -892,8 +1367,8 @@ public class MyRobot extends BCAbstractRobot {
 
 
 
-   /*
-   // A* Search Algorithm
+  /*
+  // A* Search Algorithm
 1.  Initialize the open list
 2.  Initialize the closed list
 put the starting node on the open
@@ -903,7 +1378,7 @@ list (you can leave its f at zero)
 
 3.  while the open list is not empty
 a) find the node with the least f on
-  the open list, call it "q"
+ the open list, call it "q"
 
 
 
@@ -912,38 +1387,38 @@ b) pop q off the open list
 
 
 c) generate q's 8 successors and set their
-  parents to q
+ parents to q
 
 
 d) for each successor
-   i) if successor is the goal, stop search
-     successor.g = q.g + distance between
-                         successor and q
-     successor.h = distance from goal to
-     successor (This can be done using many
-     ways, we will discuss three heuristics-
-     Manhattan, Diagonal and Euclidean
-     Heuristics)
+  i) if successor is the goal, stop search
+    successor.g = q.g + distance between
+                        successor and q
+    successor.h = distance from goal to
+    successor (This can be done using many
+    ways, we will discuss three heuristics-
+    Manhattan, Diagonal and Euclidean
+    Heuristics)
 
 
-     successor.f = successor.g + successor.h
+    successor.f = successor.g + successor.h
 
 
-   ii) if a node with the same position as
-       successor is in the OPEN list which has a
-      lower f than successor, skip this successor
+  ii) if a node with the same position as
+      successor is in the OPEN list which has a
+     lower f than successor, skip this successor
 
 
-   iii) if a node with the same position as
-       successor  is in the CLOSED list which has
-       a lower f than successor, skip this successor
-       otherwise, add  the node to the open list
+  iii) if a node with the same position as
+      successor  is in the CLOSED list which has
+      a lower f than successor, skip this successor
+      otherwise, add  the node to the open list
 end (for loop)
 
 
 e) push q on the closed list
 end (while loop)
-    */
+   */
 
     public void findPath(int[][] stop)
     {
@@ -995,22 +1470,24 @@ end (while loop)
 
 
             //generate the 8 successors to the selected node
-              /*
-              for (int j = 0; j < 8; j++)
-              {
-                  node newNode = new node();
-                  newNode.x = selectedNode.x - 1;
-                  newNode.y = selectedNode.y + 1;
+             /*
+             for (int j = 0; j < 8; j++)
+             {
+                 node newNode = new node();
+                 newNode.x = selectedNode.x - 1;
+                 newNode.y = selectedNode.y + 1;
 
 
-                  //need to find all adjacent blocks, check if they are valid blocks FIRST
-              }
-              */
+                 //need to find all adjacent blocks, check if they are valid blocks FIRST
+             }
+             */
 
         }
         //}
     }
 }
+
+
 
 
 
