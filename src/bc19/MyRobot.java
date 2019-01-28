@@ -1,10 +1,11 @@
 package bc19;
 import bc19.node;
 import bc19.nodeMap;
-import java.util.Stack;
+import bc19.Queue;
 import java.util.ArrayList;
+import java.lang.*;
 
-public class MyRobot extends BCAbstractRobot {
+    public class MyRobot extends BCAbstractRobot {
 
   /*
   Note: the variables posX and posY always refer to the actual poition on the map (as in map[posY][posX]
@@ -12,14 +13,14 @@ public class MyRobot extends BCAbstractRobot {
       (me is the variable for the robot currently running)
    */
 
-    private int step = -1;
+        private int step = -1;
 
-    //Globals
-    private int tradeKarbon = 0;
-    private int tradeFuel = 0;
+        //Globals
+        private int tradeKarbon = 0;
+        private int tradeFuel = 0;
 
-    private int friendlyCastles = 0;
-    private int enemyCastles = 0;
+        private int friendlyCastles = 0;
+        private int enemyCastles = 0;
 
     private int mapLength;
     private int clusterRadius = 6;
@@ -48,6 +49,7 @@ public class MyRobot extends BCAbstractRobot {
     private int STANDBY = 14;
     private int COUNTDOWN = 15;
     private int SPAWN_GUARDER = 16;
+    private int GUARD = 17;
 
     private int goal = UNKNOWN;
 
@@ -141,6 +143,9 @@ public class MyRobot extends BCAbstractRobot {
     private int preacherCount;
     private boolean moreFuel = true;
     private boolean firstCastle = true;
+    private int maxProphets = 6;
+
+    private node nextNode;
 
     //Turn ---------------------------------------------
 
@@ -294,7 +299,21 @@ public class MyRobot extends BCAbstractRobot {
             }
             if(goal == SPAWN_GUARDER)
             {
-                goal = SPAWN_TRAVELER;
+                if(maxProphets < 1 || clusterId.size() - (6 - maxProphets) < 1) {
+                    if(moreFuel) {
+                        goal = GET_FUEL;
+                    } else {
+                        goal = SPAWN_TRAVELER;
+                    }
+                } else if (canBuild(SPECS.PROPHET)) {
+                    int direction = directionTo((int) clusterX.get((6 - maxProphets)), (int) clusterY.get((6 - maxProphets)));
+                    direction = findOpenBuildSpot(direction);
+                    if (direction > -1) {
+                        broadcast(adjacentBroadcastingRaduis, (int) clusterX.get((6 - maxProphets)), (int) clusterY.get((6 - maxProphets)));
+                        maxProphets--;
+                        return buildUnit(SPECS.PROPHET, myDirections[direction][0], myDirections[direction][1]);
+                    }
+                }
             }
             if (goal == SPAWN_TRAVELER) {
                 if (clusterX.size() < 1) {
@@ -495,6 +514,7 @@ public class MyRobot extends BCAbstractRobot {
 
             if (hasMaxResource() && goal != BUILD_CHURCH) {
                 goal = RETURN_RESOURCE;
+                pathFind(homeCastleUnitX, homeCastleUnitY);
             }
             if (homeCastle == -1) {
                 homeCastle = findAdjacentCastle();
@@ -521,6 +541,7 @@ public class MyRobot extends BCAbstractRobot {
                         log("I'm a traveler");
                         goal = TRAVEL;
                     }
+                    pathFind(resourceX, resourceY);
                 }
             }
             if (goal == MINE) {
@@ -537,6 +558,7 @@ public class MyRobot extends BCAbstractRobot {
             } else if (goal == RETURN_RESOURCE) {
                 if (stationaryUnit) {
                     goal = MINE;
+                    pathFind(resourceX, resourceY);
                     return give(myDirections[homeCastle][0], myDirections[homeCastle][1], me.karbonite, me.fuel);
                 } else {
                     if (isAdjacentTo(homeCastleUnit) > -1) {
@@ -591,6 +613,18 @@ public class MyRobot extends BCAbstractRobot {
                 initializeProphet();
                 goal = SENTRY;
                 preacherCount = 0;
+                int[] temp = decodeSignal(homeCastleUnit);
+                if(temp[0] == -1 && temp[1] == 0)
+                {
+                    goal = SENTRY;
+                }
+                else
+                {
+                    resourceX = temp[0];
+                    resourceY = temp[1];
+                    goal = GUARD;
+                    pathFind(resourceX, resourceY);
+                }
             }
 
             if(enemyNearby()) //Attack Check
@@ -604,6 +638,12 @@ public class MyRobot extends BCAbstractRobot {
                 }
             }
 
+            if(goal == GUARD) {
+                if (distanceBetween(me.x, me.y, resourceX, resourceY) > 7) {
+                    int[] s = moveTowards(resourceX, resourceY);
+                    return move(s[0], s[1]);
+                }
+            }
             if(goal == SENTRY)
             {
                 if(distanceFrom(homeCastleUnit) < prophetStation && preacherCount < 17) {
@@ -625,6 +665,7 @@ public class MyRobot extends BCAbstractRobot {
         {
             if(step == 0) { //First Turn
                 initializePreacher();
+                pathFind(rivalCastleX, rivalCastleY);
             }
 
             if(enemyNearby()) //Attack Check
@@ -645,6 +686,101 @@ public class MyRobot extends BCAbstractRobot {
 
 
     //Methods --------------------
+
+    void pathFind(int destinationX, int destinationY) {
+
+        boolean notFound = true;
+        node solution;
+        Queue queue = new Queue();
+        queue.add(new node(destinationX, destinationY, null));
+        queue.add(new node(-1, -1, null));
+        boolean[][] nodeCrossed = new boolean[mapLength][mapLength];
+        while(notFound) {
+            boolean yoyo = false;
+            while(!yoyo) {
+                node current = (node)queue.remove();
+                if(current.x == -1 && current.y == -1) {
+                    queue.add(current);
+                    yoyo = true;
+                } else {
+
+                    if(isEmpty(1, 0)) {
+                        if(!nodeCrossed[current.x + 1][current.y])
+                            queue.add(new node(current.x + 1, current.y, current));
+                        nodeCrossed[current.x + 1][current.y] = true;
+                    }
+                    if(isEmpty(-1, 0)) {
+                        if(!nodeCrossed[current.x - 1][current.y])
+                            queue.add(new node(current.x - 1, current.y, current));
+                        nodeCrossed[current.x - 1][current.y] = true;
+                    }
+                    if(isEmpty(0, 1)) {
+                        if(!nodeCrossed[current.x][current.y + 1])
+                            queue.add(new node(current.x, current.y + 1, current));
+                        nodeCrossed[current.x][current.y + 1] = true;
+                    }
+                    if(isEmpty(0, -1)) {
+                        if(!nodeCrossed[current.x][current.y - 1])
+                            queue.add(new node(current.x, current.y - 1, current));
+                        nodeCrossed[current.x][current.y - 1] = true;
+                    }
+                    if(isEmpty(1, 1)) {
+                        if(!nodeCrossed[current.x + 1][current.y + 1])
+                            queue.add(new node(current.x + 1, current.y + 1, current));
+                        nodeCrossed[current.x + 1][current.y + 1] = true;
+                    }
+                    if(isEmpty(1, -1)) {
+                        if(!nodeCrossed[current.x + 1][current.y - 1])
+                            queue.add(new node(current.x + 1, current.y - 1, current));
+                        nodeCrossed[current.x + 1][current.y - 1] = true;
+                    }
+                    if(isEmpty(-1, 1)) {
+                        if(!nodeCrossed[current.x - 1][current.y + 1])
+                            queue.add(new node(current.x - 1, current.y + 1, current));
+                        nodeCrossed[current.x - 1][current.y + 1] = true;
+                    }
+                    if(isEmpty(-1, -1)) {
+                        if(!nodeCrossed[current.x - 1][current.y - 1])
+                            queue.add(new node(current.x - 1, current.y - 1, current));
+                        nodeCrossed[current.x - 1][current.y - 1] = true;
+                    }
+                    if(isEmpty(2, 0)) {
+                        if(!nodeCrossed[current.x + 2][current.y])
+                            queue.add(new node(current.x + 2, current.y, current));
+                        nodeCrossed[current.x + 2][current.y] = true;
+                    }
+                    if(isEmpty(0, 2)) {
+                        if(!nodeCrossed[current.x][current.y = 2])
+                            queue.add(new node(current.x, current.y + 2, current));
+                        nodeCrossed[current.x][current.y + 2] = true;
+                    }
+                    if(isEmpty(-2, 0)) {
+                        if(!nodeCrossed[current.x - 2][current.y])
+                            queue.add(new node(current.x - 2, current.y, current));
+                        nodeCrossed[current.x - 2][current.y] = true;
+                    }
+                    if(isEmpty(0, -2)) {
+                        if(!nodeCrossed[current.x][current.y - 2])
+                            queue.add(new node(current.x, current.y - 2, current));
+                        nodeCrossed[current.x][current.y - 2] = true;
+                    }
+                }
+            }
+            boolean done = false;
+            while(!done) {
+                node current = queue.remove();
+                if(current.x == me.x && current.y == me.y) {
+                    notFound = false;
+                    solution = current.parentNode;
+                    done = true;
+                } else if(current.x == -1 && current.y == -1) {
+                    done = true;
+                }
+                queue.add(current);
+           }
+        }
+        nextNode = solution;
+    }
 
     void isFirstCastle() {
         for(int i = 0; i < robots.length; i++) {
@@ -751,7 +887,7 @@ public class MyRobot extends BCAbstractRobot {
             state = AGGRESIVE_CLUSTER;
             return;
         }
-        if(mapLength <= 44)
+        if(mapLength <= 54)
         {
             log("Cover");
             state = COVER;
@@ -765,7 +901,7 @@ public class MyRobot extends BCAbstractRobot {
     }
 
     void checkIfNoClusters() {
-        if(clusterId.size() == 0) {
+        if(clusterId.size() == 0 && state != RUSHDOWN) {
             state = HOME_BOI;
             log("Home Boi");
         }
@@ -849,8 +985,15 @@ public class MyRobot extends BCAbstractRobot {
                     s[1] = posY - me.y;
                 }
             } else {
-                int direction = directionTo(posX, posY);
-                s = tryMove(direction);
+                node temp = nextNode;
+                nextNode = nextNode.parentNode;
+                if(isEmpty(me.x + temp.x, me.y + temp.y)) {
+                    s[0] = temp.x;
+                    s[1] = temp.y;
+                } else {
+                    s = tryMove(directionTo(temp.x, temp.y));
+                    pathFind(posX, posY);
+                }
             }
             return s;
         }
@@ -1354,137 +1497,6 @@ public class MyRobot extends BCAbstractRobot {
     }
 
 
-
-    //this will be the list of movements that will be returned from pathfinder
-    Stack<Integer> directionStack;
-
-    //List<Object> openList = new
-
-
-
-    //convert the map into a nodal representation
-    //pass in what type you want to move towards -- will return movement object
-
-
-
-  /*
-  // A* Search Algorithm
-1.  Initialize the open list
-2.  Initialize the closed list
-put the starting node on the open
-list (you can leave its f at zero)
-
-
-
-3.  while the open list is not empty
-a) find the node with the least f on
- the open list, call it "q"
-
-
-
-b) pop q off the open list
-
-
-
-c) generate q's 8 successors and set their
- parents to q
-
-
-d) for each successor
-  i) if successor is the goal, stop search
-    successor.g = q.g + distance between
-                        successor and q
-    successor.h = distance from goal to
-    successor (This can be done using many
-    ways, we will discuss three heuristics-
-    Manhattan, Diagonal and Euclidean
-    Heuristics)
-
-
-    successor.f = successor.g + successor.h
-
-
-  ii) if a node with the same position as
-      successor is in the OPEN list which has a
-     lower f than successor, skip this successor
-
-
-  iii) if a node with the same position as
-      successor  is in the CLOSED list which has
-      a lower f than successor, skip this successor
-      otherwise, add  the node to the open list
-end (for loop)
-
-
-e) push q on the closed list
-end (while loop)
-   */
-
-    public void findPath(int[][] stop)
-    {
-        node tempNode; //temporary node storage
-        node selectedNode; //node with the smallest f value in openList
-
-
-        ArrayList openList = new ArrayList();
-        ArrayList closedList = new ArrayList();
-
-
-        //create starting node and put it in the openList -- leave f = 0
-
-
-        node startNode = new node();
-        startNode.x = me.x;
-        startNode.y = me.y;
-        openList.add(startNode);
-
-
-        //try
-        //{
-        while (openList.isEmpty() == false)
-        {
-            //find element in list that has the smallest f value
-            int selectedIndex;
-
-
-            //go through all of the elements in the list and select index of target node
-            for (int i = 0; i < openList.size(); i++)
-            {
-                int smallestF = 0;
-                tempNode = (node)openList.get(i);
-
-
-                if ((tempNode.f < smallestF ) || (i == 0))
-                {
-                    selectedIndex = i;
-                    smallestF = tempNode.f;
-                }
-            }
-
-
-            //pop target element out of list
-            selectedNode = (node)openList.get(selectedIndex);
-            openList.remove(selectedIndex); //remove the selectedNode from the list
-
-
-
-
-            //generate the 8 successors to the selected node
-             /*
-             for (int j = 0; j < 8; j++)
-             {
-                 node newNode = new node();
-                 newNode.x = selectedNode.x - 1;
-                 newNode.y = selectedNode.y + 1;
-
-
-                 //need to find all adjacent blocks, check if they are valid blocks FIRST
-             }
-             */
-
-        }
-        //}
-    }
 }
 
 
